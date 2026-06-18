@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,6 +17,7 @@ from app.services.gmail.oauth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/me", response_model=UserProfile)
@@ -53,14 +55,28 @@ def gmail_callback(
     success_url = f"{settings.frontend_url}/dashboard?gmail=connected"
     error_url = f"{settings.frontend_url}/dashboard?gmail=error"
 
+    if not settings.supabase_jwt_secret:
+        logger.error("SUPABASE_JWT_SECRET is not configured for OAuth state")
+        return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+
+    if not settings.token_encryption_key:
+        logger.error("TOKEN_ENCRYPTION_KEY is not configured")
+        return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+
     try:
-        user_id = verify_oauth_state(state, settings)
-        refresh_token = exchange_code_for_refresh_token(code, settings)
+        user_id, code_verifier = verify_oauth_state(state, settings)
+        refresh_token = exchange_code_for_refresh_token(
+            code, settings, code_verifier
+        )
         encrypted = encrypt_token(refresh_token, settings)
         supabase_client.upsert_gmail_credentials(user_id, encrypted, GMAIL_SCOPES)
         supabase_client.set_gmail_connected(user_id, True)
         return RedirectResponse(url=success_url, status_code=status.HTTP_302_FOUND)
-    except (ValueError, TokenEncryptionError):
+    except (ValueError, TokenEncryptionError) as exc:
+        logger.warning("Gmail connect failed: %s", exc)
+        return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
+    except Exception as exc:
+        logger.exception("Gmail callback error")
         return RedirectResponse(url=error_url, status_code=status.HTTP_302_FOUND)
 
 

@@ -1,0 +1,53 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+
+export function useSyncStatus() {
+  const { session } = useAuth();
+
+  return useQuery({
+    queryKey: ["sync-status"],
+    queryFn: () => api.getSyncStatus(session!.access_token),
+    enabled: Boolean(session?.access_token),
+    refetchInterval: (query) =>
+      query.state.data?.status === "syncing" ? 2000 : false,
+  });
+}
+
+export function useStartSync() {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.startSync(session!.access_token),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sync-status"] });
+      void queryClient.invalidateQueries({ queryKey: ["threads"] });
+    },
+  });
+}
+
+export function useThreads(category: string, search: string) {
+  const { session } = useAuth();
+
+  return useQuery({
+    queryKey: ["threads", category, search],
+    queryFn: () =>
+      api.getThreads(session!.access_token, {
+        category: category === "all" ? undefined : category,
+        search: search || undefined,
+      }),
+    enabled: Boolean(session?.access_token),
+  });
+}
+
+export function useThreadDetail(threadId: string | null) {
+  const { session } = useAuth();
+
+  return useQuery({
+    queryKey: ["thread", threadId],
+    queryFn: () => api.getThread(session!.access_token, threadId!),
+    enabled: Boolean(session?.access_token && threadId),
+  });
+}

@@ -34,6 +34,12 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173"
 
+    sync_max_messages: int = 1000
+    sync_days_back: int = 90
+    gmail_requests_per_second: float = 10.0
+    use_arq_worker: bool = False
+    sync_stale_seconds: int = 90
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

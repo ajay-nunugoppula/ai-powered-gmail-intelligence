@@ -119,14 +119,20 @@ npm run dev
 
 App: http://localhost:5173
 
-### 6. Worker (optional for Phase 0)
+### 6. Worker (optional — sync runs in-process if Redis is unavailable)
 
 ```bash
 cd backend
 arq app.worker.settings.WorkerSettings
 ```
 
-Requires Redis running at `REDIS_URL`.
+Requires Redis running at `REDIS_URL`. Without Redis, clicking **Sync** still works via FastAPI background tasks.
+
+### Gmail sync
+
+- After connecting Gmail, sync starts automatically (last **90 days**, up to **1000** emails).
+- Use the refresh button in the inbox panel to run incremental sync.
+- Progress is shown in the thread list header while syncing.
 
 ## Environment Variables
 
@@ -155,6 +161,17 @@ Generate an encryption key:
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
+### Troubleshooting 401 Unauthorized on sync/API calls
+
+Google login uses **Supabase Auth** on the frontend. API calls send the Supabase **access token** to the backend — not a Google token.
+
+1. Ensure `backend/.env` exists (not only root `.env`) with:
+   - `SUPABASE_URL` — same project as frontend
+   - `SUPABASE_SERVICE_KEY` — service **role** key (not anon key)
+   - `SUPABASE_JWT_SECRET` — from Supabase → **Project Settings → API → JWT Secret**
+2. Restart the backend after changing env vars.
+3. Sign out and sign in again in the app to refresh the session.
+
 ## Deployment
 
 ### Frontend (Vercel)
@@ -175,7 +192,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 - [x] **Phase 0** — Project scaffolding, database schema, env setup
 - [x] **Phase 1** — Auth + app shell UI
-- [ ] **Phase 2** — Gmail sync pipeline
+- [x] **Phase 2** — Gmail sync pipeline
 - [ ] **Phase 3** — Summarization + categorization
 - [ ] **Phase 4** — Compose & reply
 - [ ] **Phase 5** — RAG chat agent
