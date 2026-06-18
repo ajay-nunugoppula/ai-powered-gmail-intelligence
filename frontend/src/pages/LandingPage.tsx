@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Mail, Sparkles } from "lucide-react";
+import { Navigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -8,13 +10,33 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 export function LandingPage() {
+  const { session, loading, signInWithGoogle } = useAuth();
+  const [signingIn, setSigningIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!loading && session) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const handleSignIn = async () => {
+    setSigningIn(true);
+    setError(null);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
+      setSigningIn(false);
+    }
+  };
+
   return (
     <div className="flex min-h-svh flex-col items-center justify-center bg-background p-6">
       <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-8 text-center">
-        <div className="flex size-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
+        <div className="bg-primary text-primary-foreground flex size-16 items-center justify-center rounded-2xl shadow-lg">
           <Mail className="size-8" aria-hidden="true" />
         </div>
 
@@ -32,28 +54,35 @@ export function LandingPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="size-5" aria-hidden="true" />
-              Phase 0 Complete
+              Get started
             </CardTitle>
             <CardDescription>
-              Project scaffold is ready. Next: connect Google Auth and Gmail
-              sync.
+              Sign in with Google, then connect Gmail to unlock your AI inbox.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <ul className="text-muted-foreground space-y-2 text-sm">
-              <li>FastAPI backend with health check</li>
-              <li>Supabase schema with pgvector + RLS</li>
-              <li>React + TypeScript + Tailwind + shadcn/ui</li>
-              <li>ARQ worker scaffold for background jobs</li>
+              <li>Secure Google OAuth via Supabase</li>
+              <li>Thread-first inbox with AI summaries</li>
+              <li>Conversational assistant over your emails</li>
             </ul>
+
+            {error && (
+              <p className="text-destructive text-sm" role="alert">
+                {error}
+              </p>
+            )}
+
             <Button
               className="w-full"
-              disabled={!isSupabaseConfigured}
-              aria-disabled={!isSupabaseConfigured}
+              disabled={!isSupabaseConfigured || signingIn}
+              onClick={() => void handleSignIn()}
             >
-              {isSupabaseConfigured
-                ? "Sign in with Google"
-                : "Configure .env to enable sign-in"}
+              {signingIn
+                ? "Redirecting…"
+                : isSupabaseConfigured
+                  ? "Sign in with Google"
+                  : "Configure frontend/.env.local to enable sign-in"}
             </Button>
           </CardContent>
         </Card>

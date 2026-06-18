@@ -10,6 +10,14 @@ export class ApiError extends Error {
   }
 }
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  gmail_connected: boolean;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -45,6 +53,20 @@ async function request<T>(
 export const api = {
   getHealth: () => request<{ status: string }>("/api/v1/health"),
   getRoot: () => request<{ message: string; status: string }>("/"),
+  getMe: (token: string) =>
+    request<UserProfile>("/api/v1/auth/me", { method: "GET" }, token),
+  connectGmail: (token: string) =>
+    request<{ auth_url: string }>(
+      "/api/v1/auth/gmail/connect",
+      { method: "POST" },
+      token,
+    ),
+  disconnectGmail: (token: string) =>
+    request<{ message: string }>(
+      "/api/v1/auth/gmail/disconnect",
+      { method: "DELETE" },
+      token,
+    ),
 };
 
 export { API_URL };

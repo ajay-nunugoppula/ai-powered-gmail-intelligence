@@ -60,22 +60,26 @@ repeatless-assignment/
 ```bash
 git clone <your-repo-url>
 cd repeatless-assignment
-cp .env.example .env
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
 ```
 
-Fill in all values in `.env`. Copy the same `VITE_*` values into `frontend/.env.local`.
+Fill in [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example) values in the copied files.
 
 ### 2. Supabase setup
 
 1. Create a new Supabase project.
-2. Enable **Google** provider under Authentication → Providers.
-3. Run the migration in the SQL Editor:
+2. Enable **Google** provider under Authentication → Providers (use the same Google Client ID/Secret).
+3. Under Authentication → URL Configuration, set:
+   - **Site URL:** `http://localhost:5173`
+   - **Redirect URLs:** `http://localhost:5173/auth/callback`
+4. Run the migration in the SQL Editor:
 
 ```bash
 # Paste contents of supabase/migrations/001_initial.sql into Supabase SQL Editor
 ```
 
-4. Copy your project URL, anon key, service role key, and JWT secret into `.env`.
+4. Copy your project URL, anon key, service role key, and JWT secret into `backend/.env` and `frontend/.env.local`.
 
 ### 3. Google Cloud setup
 
@@ -126,7 +130,7 @@ Requires Redis running at `REDIS_URL`.
 
 ## Environment Variables
 
-See [.env.example](.env.example) for the full list with descriptions.
+See [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example).
 
 | Variable | Description |
 |----------|-------------|
@@ -170,7 +174,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 ## Development Phases
 
 - [x] **Phase 0** — Project scaffolding, database schema, env setup
-- [ ] **Phase 1** — Auth + app shell UI
+- [x] **Phase 1** — Auth + app shell UI
 - [ ] **Phase 2** — Gmail sync pipeline
 - [ ] **Phase 3** — Summarization + categorization
 - [ ] **Phase 4** — Compose & reply

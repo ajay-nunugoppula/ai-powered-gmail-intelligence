@@ -1,0 +1,31 @@
+﻿# Secrets — never index credentials
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.local
+backend/.env
+
+# Dependencies & virtual environments
+node_modules/
+backend/venv/
+.venv/
+
+# Build output
+frontend/dist/
+frontend/dist-ssr/
+dist/
+build/
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Supabase local temp
+supabase/.temp/
