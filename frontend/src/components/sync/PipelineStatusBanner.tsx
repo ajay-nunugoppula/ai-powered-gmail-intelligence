@@ -25,6 +25,7 @@ interface PipelineStatusBannerProps {
   threadCount: number;
   isSyncPending?: boolean;
   isEnrichPending?: boolean;
+  awaitingAnalysis?: boolean;
   onRetrySync?: () => void;
   onRetryAnalyze?: () => void;
 }
@@ -84,6 +85,7 @@ export function PipelineStatusBanner({
   threadCount,
   isSyncPending = false,
   isEnrichPending = false,
+  awaitingAnalysis = false,
   onRetrySync,
   onRetryAnalyze,
 }: PipelineStatusBannerProps) {
@@ -100,7 +102,7 @@ export function PipelineStatusBanner({
     isEnrichPending || enrichmentStatus?.status === "running";
   const syncFailed = syncStatus?.status === "failed";
   const enrichFailed = enrichmentStatus?.status === "failed";
-  const pipelineRunning = isSyncing || isEnriching;
+  const pipelineRunning = isSyncing || isEnriching || awaitingAnalysis;
 
   useEffect(() => {
     if (pipelineRunning) {
@@ -138,6 +140,7 @@ export function PipelineStatusBanner({
       enrichmentStatus,
       isSyncPending,
       isEnrichPending,
+      awaitingAnalysis,
     ) &&
     !(showSuccess && !successDismissed)
   ) {
@@ -197,7 +200,7 @@ export function PipelineStatusBanner({
 
   const analyzeStepState = enrichFailed
     ? "error"
-    : isEnriching || (step === "analyze" && !isSyncing)
+    : isEnriching || awaitingAnalysis || (step === "analyze" && !isSyncing)
       ? "active"
       : enrichmentStatus?.status === "completed"
         ? "done"
@@ -260,7 +263,7 @@ export function PipelineStatusBanner({
         </div>
       )}
 
-      {!isSyncing && (isEnriching || (step === "analyze" && !syncFailed)) && (
+      {!isSyncing && (isEnriching || awaitingAnalysis || (step === "analyze" && !syncFailed)) && (
         <div className="mt-4 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
             <span className="flex items-center gap-2 font-medium">

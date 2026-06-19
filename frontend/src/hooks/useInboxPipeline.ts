@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { EnrichmentStatus, SyncStatus } from "@/lib/api";
 
 const AUTO_SYNC_INTERVAL_MS = 3 * 60 * 1000;
+const ENRICHMENT_RETRY_MS = 5000;
+const MAX_ENRICHMENT_RETRIES = 4;
 
 interface UseInboxPipelineOptions {
   gmailConnected: boolean;
@@ -22,7 +24,9 @@ export function useInboxPipeline({
   startEnrichment,
 }: UseInboxPipelineOptions) {
   const bootSyncAttempted = useRef(false);
-  const prevSyncStatus = useRef<string | undefined>(undefined);
+  const syncWasActive = useRef(false);
+  const enrichRetryCount = useRef(0);
+  const [awaitingAnalysis, setAwaitingAnalysis] = useState(false);
 
   const isSyncing = syncStatus?.status === "syncing" || startSync.isPending;
   const isEnriching =
@@ -32,15 +36,24 @@ export function useInboxPipeline({
   useEffect(() => {
     if (!gmailConnected) {
       bootSyncAttempted.current = false;
-      prevSyncStatus.current = undefined;
+      syncWasActive.current = false;
+      enrichRetryCount.current = 0;
+      setAwaitingAnalysis(false);
     }
   }, [gmailConnected]);
+
+  useEffect(() => {
+    if (isSyncing) {
+      syncWasActive.current = true;
+    }
+  }, [isSyncing]);
 
   useEffect(() => {
     if (!gmailConnected || bootSyncAttempted.current) return;
     if (syncStatus?.status === "syncing") return;
 
     bootSyncAttempted.current = true;
+    syncWasActive.current = true;
     startSync.mutate();
   }, [gmailConnected, syncStatus?.status, startSync.mutate]);
 
@@ -48,7 +61,8 @@ export function useInboxPipeline({
     if (!gmailConnected) return;
 
     const tick = () => {
-      if (pipelineBusy) return;
+      if (pipelineBusy || awaitingAnalysis) return;
+      syncWasActive.current = true;
       startSync.mutate();
     };
 
@@ -60,20 +74,17 @@ export function useInboxPipeline({
       window.clearInterval(intervalId);
       window.removeEventListener("focus", onFocus);
     };
-  }, [gmailConnected, pipelineBusy, startSync.mutate]);
+  }, [gmailConnected, pipelineBusy, awaitingAnalysis, startSync.mutate]);
 
   useEffect(() => {
     if (!gmailConnected || !enrichmentAutoStart) return;
+    if (syncStatus?.status !== "completed" || !syncWasActive.current) return;
 
-    const previous = prevSyncStatus.current;
-    prevSyncStatus.current = syncStatus?.status;
+    syncWasActive.current = false;
+    setAwaitingAnalysis(true);
+    enrichRetryCount.current = 0;
 
-    if (
-      previous === "syncing" &&
-      syncStatus?.status === "completed" &&
-      enrichmentStatus?.status === "idle" &&
-      !startEnrichment.isPending
-    ) {
+    if (enrichmentStatus?.status !== "running" && !startEnrichment.isPending) {
       startEnrichment.mutate();
     }
   }, [
@@ -85,14 +96,58 @@ export function useInboxPipeline({
     startEnrichment.mutate,
   ]);
 
+  useEffect(() => {
+    if (!awaitingAnalysis) return;
+
+    if (enrichmentStatus?.status === "running") {
+      enrichRetryCount.current = 0;
+      return;
+    }
+
+    if (enrichmentStatus?.status === "completed") {
+      setAwaitingAnalysis(false);
+      enrichRetryCount.current = 0;
+      return;
+    }
+
+    if (enrichmentStatus?.status === "failed") {
+      setAwaitingAnalysis(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (
+        enrichmentStatus?.status === "idle" &&
+        !startEnrichment.isPending &&
+        enrichRetryCount.current < MAX_ENRICHMENT_RETRIES
+      ) {
+        enrichRetryCount.current += 1;
+        startEnrichment.mutate();
+      }
+    }, ENRICHMENT_RETRY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    awaitingAnalysis,
+    enrichmentStatus?.status,
+    startEnrichment.isPending,
+    startEnrichment.mutate,
+  ]);
+
   const liveRefresh =
     gmailConnected &&
-    (pipelineBusy ||
-      syncStatus?.status === "syncing" ||
-      enrichmentStatus?.status === "running" ||
-      (syncStatus?.status === "completed" &&
-        enrichmentStatus?.status !== "completed" &&
-        enrichmentStatus?.status !== "failed"));
+    (pipelineBusy || awaitingAnalysis || syncStatus?.status === "syncing");
 
-  return { liveRefresh, pipelineBusy, isSyncing, isEnriching };
+  const watchPipeline =
+    gmailConnected &&
+    (pipelineBusy || awaitingAnalysis || syncStatus?.status === "syncing");
+
+  return {
+    liveRefresh,
+    watchPipeline,
+    awaitingAnalysis,
+    pipelineBusy,
+    isSyncing,
+    isEnriching,
+  };
 }

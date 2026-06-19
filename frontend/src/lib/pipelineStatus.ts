@@ -58,10 +58,12 @@ export function isPipelineActive(
   enrichmentStatus: EnrichmentStatus | undefined,
   isSyncPending = false,
   isEnrichPending = false,
+  awaitingAnalysis = false,
 ) {
   if (
     isSyncPending ||
     isEnrichPending ||
+    awaitingAnalysis ||
     syncStatus?.status === "syncing" ||
     enrichmentStatus?.status === "running" ||
     syncStatus?.status === "failed" ||

@@ -50,23 +50,36 @@ function AppShellContent() {
     null,
   );
   const [connectingGmail, setConnectingGmail] = useState(false);
+  const [pipelineWatch, setPipelineWatch] = useState(false);
 
-  const { data: syncStatus, isLoading: syncStatusLoading } = useSyncStatus();
-  const { data: enrichmentStatus } = useEnrichmentStatus();
-  const { data: appConfig } = useAppConfig();
   const startSync = useStartSync();
   const startEnrichment = useStartEnrichment();
+
+  const { data: syncStatus, isLoading: syncStatusLoading } = useSyncStatus({
+    watchPipeline: pipelineWatch || startSync.isPending,
+  });
+  const { data: enrichmentStatus } = useEnrichmentStatus({
+    watchPipeline: pipelineWatch,
+  });
+  const { data: appConfig } = useAppConfig();
   const generateDraft = useGenerateDraft();
   const sendEmail = useSendEmail();
 
-  const { liveRefresh, isSyncing, isEnriching } = useInboxPipeline({
-    gmailConnected: profile?.gmail_connected ?? false,
-    syncStatus,
-    enrichmentStatus,
-    enrichmentAutoStart: appConfig?.enrichment_auto_start ?? true,
-    startSync,
-    startEnrichment,
-  });
+  const { liveRefresh, awaitingAnalysis, isSyncing, isEnriching } =
+    useInboxPipeline({
+      gmailConnected: profile?.gmail_connected ?? false,
+      syncStatus,
+      enrichmentStatus,
+      enrichmentAutoStart: appConfig?.enrichment_auto_start ?? true,
+      startSync,
+      startEnrichment,
+    });
+
+  useEffect(() => {
+    setPipelineWatch(
+      awaitingAnalysis || isSyncing || isEnriching || startSync.isPending,
+    );
+  }, [awaitingAnalysis, isSyncing, isEnriching, startSync.isPending]);
 
   const { data: threadsData, isLoading: threadsLoading } = useThreads(
     activeCategory,
@@ -79,8 +92,15 @@ function AppShellContent() {
   );
 
   useEffect(() => {
+    if (syncStatus?.status === "syncing") {
+      void queryClient.invalidateQueries({ queryKey: ["threads"] });
+    }
+  }, [syncStatus?.status, syncStatus?.progress?.processed, queryClient]);
+
+  useEffect(() => {
     if (syncStatus?.status === "completed" || syncStatus?.status === "failed") {
       void queryClient.invalidateQueries({ queryKey: ["threads"] });
+      void queryClient.invalidateQueries({ queryKey: ["enrichment-status"] });
     }
   }, [syncStatus?.status, queryClient]);
 
@@ -118,7 +138,9 @@ function AppShellContent() {
     showMobileThreads();
   };
 
-  const handleSync = () => startSync.mutate();
+  const handleSync = () => {
+    startSync.mutate();
+  };
   const handleAnalyze = () => startEnrichment.mutate();
 
   const handleConnectGmail = () => {
@@ -195,6 +217,7 @@ function AppShellContent() {
           threadCount={threadsData?.items.length ?? 0}
           isSyncPending={startSync.isPending}
           isEnrichPending={startEnrichment.isPending}
+          awaitingAnalysis={awaitingAnalysis}
           onRetrySync={handleSync}
           onRetryAnalyze={handleAnalyze}
         />

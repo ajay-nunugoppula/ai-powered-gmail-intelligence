@@ -3,15 +3,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 
-export function useEnrichmentStatus() {
+const POLL_MS = 2000;
+
+export function useEnrichmentStatus(options?: { watchPipeline?: boolean }) {
   const { session } = useAuth();
 
   return useQuery({
     queryKey: ["enrichment-status"],
     queryFn: () => api.getEnrichmentStatus(session!.access_token),
     enabled: Boolean(session?.access_token),
-    refetchInterval: (query) =>
-      query.state.data?.status === "running" ? 2000 : false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "running" || options?.watchPipeline) {
+        return POLL_MS;
+      }
+      return false;
+    },
   });
 }
 

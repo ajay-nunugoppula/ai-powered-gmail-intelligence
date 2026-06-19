@@ -17,6 +17,24 @@ _PROGRESS_FLUSH_EVERY = 10
 _PROGRESS_FLUSH_SECONDS = 2.0
 
 
+def _mark_enrichment_needed_if_pending(user_id: str) -> None:
+    """Reset enrichment status when new messages need AI processing."""
+    pending = supabase_client.count_messages_needing_enrichment(user_id)
+    if pending <= 0:
+        return
+
+    supabase_client.update_enrichment_progress(
+        user_id,
+        {
+            "status": "idle",
+            "phase": "idle",
+            "total": 0,
+            "processed": 0,
+            "error": None,
+        },
+    )
+
+
 class _SyncProgress:
     def __init__(self, user_id: str, total: int, *, baseline_threads: int, baseline_messages: int) -> None:
         self.user_id = user_id
@@ -117,6 +135,8 @@ def run_gmail_sync(user_id: str, job_type: str = "initial_sync") -> None:
             lambda: service.users().getProfile(userId="me").execute(),
         )
         history_id = profile.get("historyId")
+
+        _mark_enrichment_needed_if_pending(user_id)
 
         supabase_client.update_sync_state(
             user_id,

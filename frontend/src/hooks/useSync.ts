@@ -3,17 +3,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 
-const LIVE_REFRESH_MS = 2000;
+const POLL_MS = 2000;
 
-export function useSyncStatus() {
+export function useSyncStatus(options?: { watchPipeline?: boolean }) {
   const { session } = useAuth();
 
   return useQuery({
     queryKey: ["sync-status"],
     queryFn: () => api.getSyncStatus(session!.access_token),
     enabled: Boolean(session?.access_token),
-    refetchInterval: (query) =>
-      query.state.data?.status === "syncing" ? 2000 : false,
+    refetchInterval: (query) => {
+      if (query.state.data?.status === "syncing" || options?.watchPipeline) {
+        return POLL_MS;
+      }
+      return false;
+    },
   });
 }
 
@@ -26,6 +30,16 @@ export function useStartSync() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["sync-status"] });
       void queryClient.invalidateQueries({ queryKey: ["threads"] });
+
+      let polls = 0;
+      const intervalId = window.setInterval(() => {
+        polls += 1;
+        void queryClient.invalidateQueries({ queryKey: ["sync-status"] });
+        void queryClient.invalidateQueries({ queryKey: ["threads"] });
+        if (polls >= 30) {
+          window.clearInterval(intervalId);
+        }
+      }, POLL_MS);
     },
   });
 }
@@ -45,7 +59,7 @@ export function useThreads(
         search: search || undefined,
       }),
     enabled: Boolean(session?.access_token),
-    refetchInterval: options?.liveRefresh ? LIVE_REFRESH_MS : false,
+    refetchInterval: options?.liveRefresh ? POLL_MS : false,
   });
 }
 
@@ -59,6 +73,6 @@ export function useThreadDetail(
     queryKey: ["thread", threadId],
     queryFn: () => api.getThread(session!.access_token, threadId!),
     enabled: Boolean(session?.access_token && threadId),
-    refetchInterval: options?.liveRefresh ? LIVE_REFRESH_MS : false,
+    refetchInterval: options?.liveRefresh ? POLL_MS : false,
   });
 }
