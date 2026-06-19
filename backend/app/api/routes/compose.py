@@ -1,7 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
+from app.config import Settings, get_settings
 from app.deps import get_current_user_id
 from app.models.schemas import (
     ComposeDraftResponse,
@@ -53,6 +54,8 @@ def generate_compose_draft(
 def send_compose_email(
     payload: ComposeSendRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    background_tasks: BackgroundTasks,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> ComposeSendResponse:
     try:
         result = send_email(
@@ -63,8 +66,14 @@ def send_compose_email(
             body=payload.body,
             thread_id=payload.thread_id,
             reply_to_message_id=payload.reply_to_message_id,
+            settings=settings,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if settings.enrichment_auto_start:
+        from app.services.ai.enrichment import run_enrichment
+
+        background_tasks.add_task(run_enrichment, user_id)
 
     return ComposeSendResponse(**result)

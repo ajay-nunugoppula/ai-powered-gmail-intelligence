@@ -9,6 +9,7 @@ interface AuthContextValue {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
+  profileLoading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -23,19 +24,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const refreshProfile = useCallback(async () => {
     const currentSession = (await supabase.auth.getSession()).data.session;
     if (!currentSession?.access_token) {
       setProfile(null);
+      setProfileLoading(false);
       return;
     }
 
+    setProfileLoading(true);
     try {
       const me = await api.getMe(currentSession.access_token);
       setProfile(me);
     } catch {
       setProfile(null);
+    } finally {
+      setProfileLoading(false);
     }
   }, []);
 
@@ -62,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void refreshProfile();
     } else {
       setProfile(null);
+      setProfileLoading(false);
     }
   }, [session?.access_token, refreshProfile]);
 
@@ -102,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       profile,
       loading,
+      profileLoading,
       signInWithGoogle,
       signOut,
       refreshProfile,
@@ -113,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       profile,
       loading,
+      profileLoading,
       signInWithGoogle,
       signOut,
       refreshProfile,

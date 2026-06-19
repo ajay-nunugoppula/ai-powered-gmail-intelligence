@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { GmailConnectDialog } from "@/components/auth/GmailConnectDialog";
 import type { ComposeContext } from "@/components/email/ComposeDrawer";
+import { DashboardLoader } from "@/components/common/DashboardLoader";
 import { ChatFab } from "@/components/layout/ChatFab";
 import { ChatPanel } from "@/components/layout/ChatPanel";
 import { EmailPanel } from "@/components/layout/EmailPanel";
@@ -17,6 +19,7 @@ import {
   useEnrichmentStatus,
   useStartEnrichment,
 } from "@/hooks/useEnrichment";
+import { useInboxPipeline } from "@/hooks/useInboxPipeline";
 import {
   useStartSync,
   useSyncStatus,
@@ -27,7 +30,7 @@ import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function AppShellContent() {
-  const { profile } = useAuth();
+  const { profile, profileLoading, connectGmail } = useAuth();
   const queryClient = useQueryClient();
   const {
     isMobile,
@@ -46,9 +49,9 @@ function AppShellContent() {
   const [composeContext, setComposeContext] = useState<ComposeContext | null>(
     null,
   );
-  const autoSyncAttempted = useRef(false);
+  const [connectingGmail, setConnectingGmail] = useState(false);
 
-  const { data: syncStatus } = useSyncStatus();
+  const { data: syncStatus, isLoading: syncStatusLoading } = useSyncStatus();
   const { data: enrichmentStatus } = useEnrichmentStatus();
   const { data: appConfig } = useAppConfig();
   const startSync = useStartSync();
@@ -56,22 +59,23 @@ function AppShellContent() {
   const generateDraft = useGenerateDraft();
   const sendEmail = useSendEmail();
 
-  const isSyncing = syncStatus?.status === "syncing";
-  const isEnriching = enrichmentStatus?.status === "running";
-  const pipelineActive =
-    isSyncing ||
-    isEnriching ||
-    startSync.isPending ||
-    startEnrichment.isPending;
+  const { liveRefresh, isSyncing, isEnriching } = useInboxPipeline({
+    gmailConnected: profile?.gmail_connected ?? false,
+    syncStatus,
+    enrichmentStatus,
+    enrichmentAutoStart: appConfig?.enrichment_auto_start ?? true,
+    startSync,
+    startEnrichment,
+  });
 
   const { data: threadsData, isLoading: threadsLoading } = useThreads(
     activeCategory,
     search,
-    { liveRefresh: pipelineActive },
+    { liveRefresh },
   );
   const { data: threadDetail, isLoading: threadLoading } = useThreadDetail(
     selectedThreadId,
-    { liveRefresh: pipelineActive },
+    { liveRefresh },
   );
 
   useEffect(() => {
@@ -82,40 +86,17 @@ function AppShellContent() {
 
   useEffect(() => {
     if (
+      enrichmentStatus?.status === "running" ||
       enrichmentStatus?.status === "completed" ||
       enrichmentStatus?.status === "failed"
     ) {
       void queryClient.invalidateQueries({ queryKey: ["threads"] });
       void queryClient.invalidateQueries({ queryKey: ["thread"] });
     }
-  }, [enrichmentStatus?.status, queryClient]);
-
-  useEffect(() => {
-    if (!profile?.gmail_connected) {
-      autoSyncAttempted.current = false;
-    }
-  }, [profile?.gmail_connected]);
-
-  useEffect(() => {
-    if (
-      profile?.gmail_connected &&
-      syncStatus?.status === "idle" &&
-      !threadsLoading &&
-      (threadsData?.items.length ?? 0) === 0 &&
-      !startSync.isPending &&
-      !isSyncing &&
-      !autoSyncAttempted.current
-    ) {
-      autoSyncAttempted.current = true;
-      startSync.mutate();
-    }
   }, [
-    profile?.gmail_connected,
-    syncStatus?.status,
-    threadsLoading,
-    threadsData?.items.length,
-    startSync,
-    isSyncing,
+    enrichmentStatus?.status,
+    enrichmentStatus?.processed,
+    queryClient,
   ]);
 
   useEffect(() => {
@@ -140,6 +121,11 @@ function AppShellContent() {
   const handleSync = () => startSync.mutate();
   const handleAnalyze = () => startEnrichment.mutate();
 
+  const handleConnectGmail = () => {
+    setConnectingGmail(true);
+    void connectGmail().catch(() => setConnectingGmail(false));
+  };
+
   const handleOpenCompose = (context: ComposeContext) => {
     setComposeContext(context);
     setComposeOpen(true);
@@ -161,6 +147,14 @@ function AppShellContent() {
       : sendEmail.error?.message) ||
     null;
 
+  const isBootstrapping =
+    profileLoading ||
+    syncStatusLoading ||
+    (profile?.gmail_connected && threadsLoading && threadsData === undefined);
+
+  const showGmailConnectDialog =
+    !profileLoading && Boolean(profile) && !profile?.gmail_connected;
+
   const showThreadList = !isMobile || (mobileView === "threads" && !chatOpen);
   const showEmailPanel =
     !isMobile || (mobileView === "email" && !chatOpen && Boolean(selectedThreadId));
@@ -168,8 +162,26 @@ function AppShellContent() {
   const showChatOverlay = chatOpen && (!isWide || isMobile);
   const showChatDocked = chatOpen && isWide;
 
+  if (isBootstrapping) {
+    return (
+      <DashboardLoader
+        message={
+          profileLoading
+            ? "Loading your profile…"
+            : "Preparing your inbox…"
+        }
+      />
+    );
+  }
+
   return (
     <div className="flex h-svh overflow-hidden">
+      <GmailConnectDialog
+        open={showGmailConnectDialog}
+        connecting={connectingGmail}
+        onConnect={handleConnectGmail}
+      />
+
       <Sidebar
         activeCategory={activeCategory}
         onCategoryChange={setActiveCategory}
@@ -199,8 +211,8 @@ function AppShellContent() {
               isLoading={threadsLoading}
               selectedThreadId={selectedThreadId}
               syncStatus={syncStatus}
-              isSyncing={isSyncing || startSync.isPending}
-              isEnriching={isEnriching || startEnrichment.isPending}
+              isSyncing={isSyncing}
+              isEnriching={isEnriching}
               syncDaysBack={appConfig?.sync_days_back}
               onSelectThread={handleSelectThread}
               onSync={handleSync}
@@ -216,7 +228,7 @@ function AppShellContent() {
               isLoading={threadLoading}
               gmailConnected={profile?.gmail_connected ?? false}
               userEmail={profile?.email}
-              isEnriching={isEnriching || startEnrichment.isPending}
+              isEnriching={isEnriching}
               enrichmentProgress={
                 enrichmentStatus?.status === "running"
                   ? {
@@ -232,6 +244,8 @@ function AppShellContent() {
               onGenerateDraft={(payload) => generateDraft.mutateAsync(payload)}
               onSendEmail={async (payload) => {
                 await sendEmail.mutateAsync(payload);
+                startEnrichment.mutate();
+                await queryClient.invalidateQueries({ queryKey: ["enrichment-status"] });
                 await queryClient.invalidateQueries({ queryKey: ["threads"] });
                 await queryClient.invalidateQueries({
                   queryKey: ["thread", selectedThreadId],
@@ -250,7 +264,7 @@ function AppShellContent() {
               mode="docked"
               gmailConnected={profile?.gmail_connected ?? false}
               inboxIndexed={enrichmentStatus?.status === "completed"}
-              isEnriching={isEnriching || startEnrichment.isPending}
+              isEnriching={isEnriching}
               enrichmentProgress={
                 enrichmentStatus?.status === "running"
                   ? {
@@ -274,7 +288,7 @@ function AppShellContent() {
           mode="overlay"
           gmailConnected={profile?.gmail_connected ?? false}
           inboxIndexed={enrichmentStatus?.status === "completed"}
-          isEnriching={isEnriching || startEnrichment.isPending}
+          isEnriching={isEnriching}
           enrichmentProgress={
             enrichmentStatus?.status === "running"
               ? {

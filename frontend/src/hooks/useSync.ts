@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 
+const LIVE_REFRESH_MS = 2000;
+
 export function useSyncStatus() {
   const { session } = useAuth();
 
@@ -43,7 +45,7 @@ export function useThreads(
         search: search || undefined,
       }),
     enabled: Boolean(session?.access_token),
-    refetchInterval: options?.liveRefresh ? 3000 : false,
+    refetchInterval: options?.liveRefresh ? LIVE_REFRESH_MS : false,
   });
 }
 
@@ -57,6 +59,6 @@ export function useThreadDetail(
     queryKey: ["thread", threadId],
     queryFn: () => api.getThread(session!.access_token, threadId!),
     enabled: Boolean(session?.access_token && threadId),
-    refetchInterval: options?.liveRefresh ? 3000 : false,
+    refetchInterval: options?.liveRefresh ? LIVE_REFRESH_MS : false,
   });
 }
