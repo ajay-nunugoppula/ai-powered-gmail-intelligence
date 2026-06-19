@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { EnrichmentStatus, SyncStatus, ThreadItem } from "@/lib/api";
 import { formatDistanceToNow } from "@/lib/dates";
+import { formatPreviewText } from "@/lib/emailContent";
 import { cn } from "@/lib/utils";
 
 function formatThreadDate(value: string | null) {
@@ -144,7 +145,7 @@ export function ThreadPanel({
           >
             <div className="mb-1 flex items-start justify-between gap-2">
               <p className="line-clamp-1 text-sm font-medium">
-                {thread.subject || "(No subject)"}
+                {formatPreviewText(thread.subject || "(No subject)")}
               </p>
               <span className="text-muted-foreground shrink-0 text-[11px]">
                 {formatThreadDate(thread.last_message_at)}
@@ -164,7 +165,9 @@ export function ThreadPanel({
               </Badge>
             )}
             <p className="text-muted-foreground line-clamp-2 text-xs">
-              {thread.thread_summary || thread.snippet || "No preview available"}
+              {formatPreviewText(
+                thread.thread_summary || thread.snippet || "No preview available",
+              )}
             </p>
             {thread.message_count > 1 && (
               <p className="text-muted-foreground mt-1 text-[11px]">

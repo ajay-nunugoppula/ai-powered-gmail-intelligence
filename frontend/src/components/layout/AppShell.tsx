@@ -160,7 +160,11 @@ export function AppShell() {
           isSending={sendEmail.isPending}
           composeError={composeError}
         />
-        <ChatPanel />
+        <ChatPanel
+          gmailConnected={profile?.gmail_connected ?? false}
+          inboxIndexed={enrichmentStatus?.status === "completed"}
+          onSelectThread={setSelectedThreadId}
+        />
       </div>
     </div>
   );

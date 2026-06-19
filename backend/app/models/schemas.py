@@ -145,3 +145,54 @@ class ComposeSendResponse(BaseModel):
     gmail_message_id: str | None = None
     gmail_thread_id: str | None = None
     message: str
+
+
+class ChatCitation(BaseModel):
+    index: int
+    message_id: str
+    thread_id: str | None = None
+    subject: str | None = None
+    from_email: str | None = None
+    snippet: str | None = None
+    similarity: float | None = None
+
+
+class ChatMessageItem(BaseModel):
+    id: str
+    role: str
+    content: str
+    citations: list[ChatCitation] = Field(default_factory=list)
+    created_at: str
+
+
+class ChatSessionItem(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+
+
+class ChatSessionListResponse(BaseModel):
+    items: list[ChatSessionItem]
+
+
+class ChatSessionDetailResponse(BaseModel):
+    session: ChatSessionItem
+    messages: list[ChatMessageItem]
+
+
+class ChatCreateSessionRequest(BaseModel):
+    title: str | None = None
+
+
+class ChatCreateSessionResponse(BaseModel):
+    session: ChatSessionItem
+
+
+class ChatSendMessageRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatSendMessageResponse(BaseModel):
+    user_message: ChatMessageItem
+    assistant_message: ChatMessageItem

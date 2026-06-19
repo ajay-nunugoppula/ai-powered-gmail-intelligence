@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 
 from supabase import Client, create_client
@@ -781,3 +782,229 @@ def get_message_summary(message_id: str) -> dict | None:
         .execute()
     )
     return _maybe_single_data(result)
+
+
+def list_chat_sessions(user_id: str, *, limit: int = 20) -> list[dict]:
+    client = get_supabase_client()
+    result = (
+        client.table("chat_sessions")
+        .select("id, title, created_at, updated_at")
+        .eq("user_id", user_id)
+        .order("updated_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
+def create_chat_session(user_id: str, title: str = "New conversation") -> dict:
+    client = get_supabase_client()
+    now = datetime.now(UTC).isoformat()
+    result = (
+        client.table("chat_sessions")
+        .insert(
+            {
+                "user_id": user_id,
+                "title": title,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        .execute()
+    )
+    rows = result.data or []
+    if not rows:
+        raise RuntimeError("Failed to create chat session")
+    return rows[0]
+
+
+def get_chat_session(user_id: str, session_id: str) -> dict | None:
+    client = get_supabase_client()
+    result = (
+        client.table("chat_sessions")
+        .select("id, title, created_at, updated_at")
+        .eq("user_id", user_id)
+        .eq("id", session_id)
+        .maybe_single()
+        .execute()
+    )
+    return _maybe_single_data(result)
+
+
+def update_chat_session_title(user_id: str, session_id: str, title: str) -> None:
+    client = get_supabase_client()
+    client.table("chat_sessions").update(
+        {
+            "title": title,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    ).eq("user_id", user_id).eq("id", session_id).execute()
+
+
+def touch_chat_session(session_id: str) -> None:
+    client = get_supabase_client()
+    client.table("chat_sessions").update(
+        {"updated_at": datetime.now(UTC).isoformat()}
+    ).eq("id", session_id).execute()
+
+
+def delete_chat_session(user_id: str, session_id: str) -> bool:
+    client = get_supabase_client()
+    result = (
+        client.table("chat_sessions")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("id", session_id)
+        .execute()
+    )
+    return bool(result.data)
+
+
+def list_chat_messages(session_id: str, *, limit: int = 100) -> list[dict]:
+    client = get_supabase_client()
+    result = (
+        client.table("chat_messages")
+        .select("id, role, content, citations, created_at")
+        .eq("session_id", session_id)
+        .order("created_at", desc=False)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
+def insert_chat_message(
+    *,
+    session_id: str,
+    role: str,
+    content: str,
+    citations: list[dict] | None = None,
+) -> dict:
+    client = get_supabase_client()
+    result = (
+        client.table("chat_messages")
+        .insert(
+            {
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "citations": citations or [],
+            }
+        )
+        .execute()
+    )
+    rows = result.data or []
+    if not rows:
+        raise RuntimeError("Failed to insert chat message")
+    touch_chat_session(session_id)
+    return rows[0]
+
+
+def match_message_embeddings(
+    *,
+    user_id: str,
+    query_embedding: list[float],
+    match_count: int,
+    match_threshold: float,
+) -> list[dict]:
+    client = get_supabase_client()
+    result = client.rpc(
+        "match_message_embeddings",
+        {
+            "query_embedding": query_embedding,
+            "match_user_id": user_id,
+            "match_count": match_count,
+            "match_threshold": match_threshold,
+        },
+    ).execute()
+    return result.data or []
+
+
+def get_messages_brief(user_id: str, message_ids: list[str]) -> dict[str, dict]:
+    if not message_ids:
+        return {}
+    client = get_supabase_client()
+    result = (
+        client.table("messages")
+        .select("id, thread_id, subject, from_email, received_at, body_text")
+        .eq("user_id", user_id)
+        .in_("id", message_ids)
+        .execute()
+    )
+    return {row["id"]: row for row in (result.data or [])}
+
+
+def list_messages_by_category_slug(
+    user_id: str,
+    category_slug: str,
+    *,
+    limit: int = 10,
+) -> list[dict]:
+    category_id = get_category_id_by_slug(user_id, category_slug)
+    if not category_id:
+        return []
+
+    client = get_supabase_client()
+    threads_result = (
+        client.table("threads")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("category_id", category_id)
+        .order("last_message_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    thread_ids = [row["id"] for row in (threads_result.data or [])]
+    if not thread_ids:
+        return []
+
+    messages_result = (
+        client.table("messages")
+        .select("id, thread_id, subject, from_email, body_text, received_at")
+        .eq("user_id", user_id)
+        .in_("thread_id", thread_ids)
+        .order("received_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return messages_result.data or []
+
+
+def search_messages_by_terms(
+    user_id: str,
+    terms: list[str],
+    *,
+    limit: int = 10,
+) -> list[dict]:
+    safe_terms = [re.sub(r"[^a-zA-Z0-9]", "", term) for term in terms if term]
+    safe_terms = [term for term in safe_terms if len(term) >= 3]
+    if not safe_terms:
+        return []
+
+    client = get_supabase_client()
+    or_filters: list[str] = []
+    for term in safe_terms:
+        or_filters.append(f"subject.ilike.%{term}%")
+        or_filters.append(f"body_text.ilike.%{term}%")
+
+    result = (
+        client.table("messages")
+        .select("id, thread_id, subject, from_email, body_text, received_at")
+        .eq("user_id", user_id)
+        .or_(",".join(or_filters))
+        .order("received_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
+def count_message_embeddings(user_id: str) -> int:
+    client = get_supabase_client()
+    result = (
+        client.table("message_embeddings")
+        .select("id", count="exact", head=True)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return result.count or 0

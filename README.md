@@ -218,7 +218,7 @@ Google login uses **Supabase Auth** on the frontend. API calls send the Supabase
 - [x] **Phase 2** — Gmail sync pipeline
 - [x] **Phase 3** — Summarization + categorization + embeddings
 - [x] **Phase 4** — Compose & reply
-- [ ] **Phase 5** — RAG chat agent
+- [x] **Phase 5** — RAG chat agent
 - [ ] **Phase 6** — Bonus features + polish
 - [ ] **Phase 7** — Deploy + documentation
 

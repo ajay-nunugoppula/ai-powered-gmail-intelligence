@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, compose, enrichment, health, sync, threads
+from app.api.routes import auth, chat, compose, enrichment, health, sync, threads
 from app.config import get_settings
 
 
@@ -36,6 +36,7 @@ app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(sync.router, prefix=settings.api_prefix)
 app.include_router(enrichment.router, prefix=settings.api_prefix)
 app.include_router(compose.router, prefix=settings.api_prefix)
+app.include_router(chat.router, prefix=settings.api_prefix)
 app.include_router(threads.router, prefix=settings.api_prefix)
 
 

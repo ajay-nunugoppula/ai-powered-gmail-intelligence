@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     embedding_chunk_size: int = 400
     embedding_chunk_overlap: int = 50
 
+    rag_match_count: int = 20
+    rag_match_threshold: float = 0.38
+    rag_max_context_chunks: int = 8
+    chat_history_limit: int = 10
+
     @field_validator("nvidia_embed_model", mode="before")
     @classmethod
     def normalize_nvidia_embed_model(cls, value: object) -> object:

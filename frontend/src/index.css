@@ -118,3 +118,42 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+/* HTML emails ship with hardcoded light/dark colors — isolate on a light canvas */
+.email-body-canvas {
+  color-scheme: light;
+  background-color: #ffffff !important;
+  color: #171717 !important;
+}
+
+.email-body-canvas .email-body-inner,
+.email-body-canvas .email-body-inner *:not(img):not(svg):not(path) {
+  color: #171717 !important;
+}
+
+.email-body-canvas .email-body-inner a {
+  color: #1d4ed8 !important;
+  text-decoration: underline;
+}
+
+.email-body-canvas .email-body-inner table {
+  width: 100%;
+}
+
+.email-body-canvas .email-body-inner td,
+.email-body-canvas .email-body-inner th,
+.email-body-canvas .email-body-inner div,
+.email-body-canvas .email-body-inner p,
+.email-body-canvas .email-body-inner span,
+.email-body-canvas .email-body-inner li,
+.email-body-canvas .email-body-inner h1,
+.email-body-canvas .email-body-inner h2,
+.email-body-canvas .email-body-inner h3,
+.email-body-canvas .email-body-inner h4 {
+  background-color: transparent !important;
+}
+
+.email-body-canvas .email-body-inner img {
+  max-width: 100%;
+  height: auto;
+}

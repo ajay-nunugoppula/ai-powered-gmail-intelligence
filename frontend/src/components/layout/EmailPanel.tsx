@@ -1,6 +1,7 @@
 import { Mail, PenSquare, Reply } from "lucide-react";
 
 import { AiSummaryCard } from "@/components/email/AiSummaryCard";
+import { EmailBody } from "@/components/email/EmailBody";
 import {
   ComposeDrawer,
   type ComposeContext,
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ComposeDraft, MessageItem, ThreadItem } from "@/lib/api";
 import { formatDistanceToNow } from "@/lib/dates";
+import { formatPreviewText } from "@/lib/emailContent";
 
 interface EmailPanelProps {
   thread: ThreadItem | null;
@@ -111,7 +113,7 @@ export function EmailPanel({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold">
-                {thread.subject || "(No subject)"}
+                {formatPreviewText(thread.subject || "(No subject)")}
               </h2>
               {thread.category?.name && (
                 <Badge
@@ -246,9 +248,10 @@ export function EmailPanel({
                   </div>
                 )}
 
-                <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {message.body_text || "(No text content)"}
-                </div>
+                <EmailBody
+                  bodyText={message.body_text}
+                  bodyHtml={message.body_html}
+                />
               </article>
             ))}
           </div>

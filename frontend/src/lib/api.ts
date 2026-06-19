@@ -98,6 +98,36 @@ export interface ComposeDraft {
   cc: string[];
 }
 
+export interface ChatCitation {
+  index: number;
+  message_id: string;
+  thread_id: string | null;
+  subject: string | null;
+  from_email: string | null;
+  snippet: string | null;
+  similarity: number | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: string;
+  content: string;
+  citations: ChatCitation[];
+  created_at: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionDetail {
+  session: ChatSession;
+  messages: ChatMessage[];
+}
+
 function parseApiError(body: string) {
   try {
     const parsed = JSON.parse(body) as { detail?: string | { msg?: string }[] };
@@ -233,6 +263,33 @@ export const api = {
     request<{ gmail_message_id: string | null; message: string }>(
       "/api/v1/compose/send",
       { method: "POST", body: JSON.stringify(payload) },
+      token,
+    ),
+  listChatSessions: (token: string) =>
+    request<{ items: ChatSession[] }>(
+      "/api/v1/chat/sessions",
+      { method: "GET" },
+      token,
+    ),
+  createChatSession: (token: string, title?: string) =>
+    request<{ session: ChatSession }>(
+      "/api/v1/chat/sessions",
+      {
+        method: "POST",
+        body: JSON.stringify(title ? { title } : {}),
+      },
+      token,
+    ),
+  getChatSession: (token: string, sessionId: string) =>
+    request<ChatSessionDetail>(
+      `/api/v1/chat/sessions/${sessionId}`,
+      { method: "GET" },
+      token,
+    ),
+  sendChatMessage: (token: string, sessionId: string, content: string) =>
+    request<{ user_message: ChatMessage; assistant_message: ChatMessage }>(
+      `/api/v1/chat/sessions/${sessionId}/messages`,
+      { method: "POST", body: JSON.stringify({ content }) },
       token,
     ),
 };

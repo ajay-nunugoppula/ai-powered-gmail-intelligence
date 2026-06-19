@@ -1,4 +1,5 @@
 import base64
+import html
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -39,11 +40,26 @@ def _decode_body(data: str | None) -> str | None:
         return None
 
 
-def _strip_html(html: str) -> str:
-    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.I | re.S)
+_INVISIBLE_CHARS = re.compile(
+    r"[\u200b-\u200d\u2060\ufeff\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e"
+    r"\u2061-\u2064\u206a-\u206f]"
+)
+
+
+def _clean_text(text: str | None) -> str | None:
+    if not text:
+        return None
+    cleaned = html.unescape(text)
+    cleaned = _INVISIBLE_CHARS.sub("", cleaned)
+    cleaned = cleaned.replace("\u00a0", " ")
+    return cleaned.strip() or None
+
+
+def _strip_html(html_content: str) -> str:
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html_content, flags=re.I | re.S)
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    return html.unescape(text.strip())
 
 
 def _extract_bodies(payload: dict) -> tuple[str | None, str | None]:
@@ -53,7 +69,7 @@ def _extract_bodies(payload: dict) -> tuple[str | None, str | None]:
     html_body: str | None = None
 
     if mime_type == "text/plain":
-        text_body = _decode_body(body_data)
+        text_body = _clean_text(_decode_body(body_data))
     elif mime_type == "text/html":
         html_body = _decode_body(body_data)
 
@@ -65,7 +81,7 @@ def _extract_bodies(payload: dict) -> tuple[str | None, str | None]:
             html_body = part_html
 
     if not text_body and html_body:
-        text_body = _strip_html(html_body)
+        text_body = _clean_text(_strip_html(html_body))
 
     return text_body, html_body
 
