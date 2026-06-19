@@ -1,6 +1,7 @@
-import { ArrowLeft, Bot, Mail, PenSquare, Reply } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, Mail, PenSquare, Reply } from "lucide-react";
 
 import { CategoryInsights } from "@/components/insights/CategoryInsights";
+import { ThreadViewLoader } from "@/components/common/ThreadViewLoader";
 import { AiSummaryCard } from "@/components/email/AiSummaryCard";
 import { EmailBody } from "@/components/email/EmailBody";
 import {
@@ -51,6 +52,8 @@ interface EmailPanelProps {
   isEnriching?: boolean;
   enrichmentProgress?: { processed: number; total: number };
   onBack?: () => void;
+  selectedThreadId?: string | null;
+  previewThread?: ThreadItem | null;
   className?: string;
 }
 
@@ -73,9 +76,21 @@ export function EmailPanel({
   isEnriching = false,
   enrichmentProgress,
   onBack,
+  selectedThreadId = null,
+  previewThread = null,
   className,
 }: EmailPanelProps) {
   const { openChat, isWide } = useLayout();
+
+  if (selectedThreadId && isLoading && !thread) {
+    return (
+      <ThreadViewLoader
+        previewThread={previewThread}
+        onBack={onBack}
+        className={className}
+      />
+    );
+  }
 
   if (!thread) {
     return (
@@ -227,9 +242,25 @@ export function EmailPanel({
 
       <div className="flex-1 overflow-y-auto p-4 pb-32 sm:p-6 sm:pb-48">
         {isLoading && (
-          <p className="text-muted-foreground text-sm" role="status">
-            Loading messages…
-          </p>
+          <div className="space-y-6">
+            <div
+              className="text-muted-foreground flex items-center gap-2 text-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2
+                className="text-primary size-4 shrink-0 animate-spin"
+                aria-hidden="true"
+              />
+              Loading messages…
+            </div>
+            <div className="animate-pulse space-y-6" aria-hidden="true">
+              <div className="rounded-xl border p-4">
+                <div className="bg-muted mb-2 h-4 w-32 rounded" />
+                <div className="bg-muted h-3 w-full rounded" />
+              </div>
+            </div>
+          </div>
         )}
 
         {!isLoading && (

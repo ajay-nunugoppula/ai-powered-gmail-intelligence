@@ -171,6 +171,11 @@ function AppShellContent() {
       : sendEmail.error?.message) ||
     null;
 
+  const previewThread =
+    threadsData?.items.find((t) => t.id === selectedThreadId) ??
+    allThreadsData?.items.find((t) => t.id === selectedThreadId) ??
+    null;
+
   useEffect(() => {
     if (hasInitialLoaded.current) return;
     if (profileLoading || syncStatusLoading) return;
@@ -295,6 +300,8 @@ function AppShellContent() {
               isGenerating={generateDraft.isPending}
               isSending={sendEmail.isPending}
               composeError={composeError}
+              selectedThreadId={selectedThreadId}
+              previewThread={previewThread}
               onBack={isMobile ? handleBackToThreads : undefined}
               className={cn(isMobile && "w-full")}
             />
