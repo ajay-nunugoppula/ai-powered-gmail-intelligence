@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import type { ComposeContext } from "@/components/email/ComposeDrawer";
+import { ChatFab } from "@/components/layout/ChatFab";
 import { ChatPanel } from "@/components/layout/ChatPanel";
 import { EmailPanel } from "@/components/layout/EmailPanel";
+import { MobileNav } from "@/components/layout/MobileNav";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ThreadPanel } from "@/components/layout/ThreadPanel";
+import { LayoutProvider, useLayout } from "@/contexts/LayoutContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGenerateDraft, useSendEmail } from "@/hooks/useCompose";
 import {
@@ -19,10 +22,21 @@ import {
   useThreads,
 } from "@/hooks/useSync";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
-export function AppShell() {
+function AppShellContent() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+  const {
+    isMobile,
+    isWide,
+    chatOpen,
+    mobileView,
+    showMobileEmail,
+    showMobileThreads,
+    closeChat,
+  } = useLayout();
+
   const [activeCategory, setActiveCategory] = useState("all");
   const [search] = useState("");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -92,13 +106,27 @@ export function AppShell() {
     isSyncing,
   ]);
 
-  const handleSync = () => {
-    startSync.mutate();
+  useEffect(() => {
+    if (isMobile && selectedThreadId) {
+      showMobileEmail();
+    }
+  }, [isMobile, selectedThreadId, showMobileEmail]);
+
+  const handleSelectThread = (threadId: string) => {
+    setSelectedThreadId(threadId);
+    if (isMobile) {
+      closeChat();
+      showMobileEmail();
+    }
   };
 
-  const handleAnalyze = () => {
-    startEnrichment.mutate();
+  const handleBackToThreads = () => {
+    setSelectedThreadId(null);
+    showMobileThreads();
   };
+
+  const handleSync = () => startSync.mutate();
+  const handleAnalyze = () => startEnrichment.mutate();
 
   const handleOpenCompose = (context: ComposeContext) => {
     setComposeContext(context);
@@ -121,51 +149,101 @@ export function AppShell() {
       : sendEmail.error?.message) ||
     null;
 
+  const showThreadList = !isMobile || (mobileView === "threads" && !chatOpen);
+  const showEmailPanel =
+    !isMobile || (mobileView === "email" && !chatOpen && Boolean(selectedThreadId));
+  const showEmailEmpty = !isMobile && !selectedThreadId;
+  const showChatOverlay = chatOpen && (!isWide || isMobile);
+  const showChatDocked = chatOpen && isWide;
+
   return (
     <div className="flex h-svh overflow-hidden">
       <Sidebar
         activeCategory={activeCategory}
         onCategoryChange={setActiveCategory}
       />
-      <div className="flex min-w-0 flex-1">
-        <ThreadPanel
-          gmailConnected={profile?.gmail_connected ?? false}
-          threads={threadsData?.items ?? []}
-          isLoading={threadsLoading}
-          selectedThreadId={selectedThreadId}
-          syncStatus={syncStatus}
-          enrichmentStatus={enrichmentStatus}
-          isSyncing={isSyncing || startSync.isPending}
-          isEnriching={isEnriching || startEnrichment.isPending}
-          onSelectThread={setSelectedThreadId}
-          onSync={handleSync}
-          onAnalyze={handleAnalyze}
-        />
-        <EmailPanel
-          thread={threadDetail?.thread ?? null}
-          messages={threadDetail?.messages ?? []}
-          isLoading={threadLoading}
-          gmailConnected={profile?.gmail_connected ?? false}
-          composeOpen={composeOpen}
-          composeContext={composeContext}
-          onOpenCompose={handleOpenCompose}
-          onCloseCompose={handleCloseCompose}
-          onGenerateDraft={(payload) => generateDraft.mutateAsync(payload)}
-          onSendEmail={async (payload) => {
-            await sendEmail.mutateAsync(payload);
-            void queryClient.invalidateQueries({ queryKey: ["threads"] });
-            void queryClient.invalidateQueries({ queryKey: ["thread"] });
-          }}
-          isGenerating={generateDraft.isPending}
-          isSending={sendEmail.isPending}
-          composeError={composeError}
-        />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1",
+            isMobile && !chatOpen && "pb-14",
+          )}
+        >
+          {showThreadList && (
+            <ThreadPanel
+              gmailConnected={profile?.gmail_connected ?? false}
+              threads={threadsData?.items ?? []}
+              isLoading={threadsLoading}
+              selectedThreadId={selectedThreadId}
+              syncStatus={syncStatus}
+              enrichmentStatus={enrichmentStatus}
+              isSyncing={isSyncing || startSync.isPending}
+              isEnriching={isEnriching || startEnrichment.isPending}
+              onSelectThread={handleSelectThread}
+              onSync={handleSync}
+              onAnalyze={handleAnalyze}
+              className={cn(isMobile ? "w-full border-r-0" : "w-80")}
+            />
+          )}
+
+          {(showEmailPanel || showEmailEmpty) && (
+            <EmailPanel
+              thread={threadDetail?.thread ?? null}
+              messages={threadDetail?.messages ?? []}
+              isLoading={threadLoading}
+              gmailConnected={profile?.gmail_connected ?? false}
+              composeOpen={composeOpen}
+              composeContext={composeContext}
+              onOpenCompose={handleOpenCompose}
+              onCloseCompose={handleCloseCompose}
+              onGenerateDraft={(payload) => generateDraft.mutateAsync(payload)}
+              onSendEmail={async (payload) => {
+                await sendEmail.mutateAsync(payload);
+                void queryClient.invalidateQueries({ queryKey: ["threads"] });
+                void queryClient.invalidateQueries({ queryKey: ["thread"] });
+              }}
+              isGenerating={generateDraft.isPending}
+              isSending={sendEmail.isPending}
+              composeError={composeError}
+              onBack={isMobile ? handleBackToThreads : undefined}
+              className={cn(isMobile && "w-full")}
+            />
+          )}
+
+          {showChatDocked && (
+            <ChatPanel
+              mode="docked"
+              gmailConnected={profile?.gmail_connected ?? false}
+              inboxIndexed={enrichmentStatus?.status === "completed"}
+              onSelectThread={handleSelectThread}
+            />
+          )}
+        </div>
+
+        {isMobile && !chatOpen && (
+          <MobileNav hasSelectedThread={Boolean(selectedThreadId)} />
+        )}
+      </div>
+
+      {showChatOverlay && (
         <ChatPanel
+          mode="overlay"
           gmailConnected={profile?.gmail_connected ?? false}
           inboxIndexed={enrichmentStatus?.status === "completed"}
-          onSelectThread={setSelectedThreadId}
+          onSelectThread={handleSelectThread}
         />
-      </div>
+      )}
+
+      <ChatFab />
     </div>
+  );
+}
+
+export function AppShell() {
+  return (
+    <LayoutProvider>
+      <AppShellContent />
+    </LayoutProvider>
   );
 }

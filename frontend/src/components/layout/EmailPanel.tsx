@@ -1,4 +1,4 @@
-import { Mail, PenSquare, Reply } from "lucide-react";
+import { ArrowLeft, Bot, Mail, PenSquare, Reply } from "lucide-react";
 
 import { AiSummaryCard } from "@/components/email/AiSummaryCard";
 import { EmailBody } from "@/components/email/EmailBody";
@@ -8,9 +8,11 @@ import {
 } from "@/components/email/ComposeDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useLayout } from "@/contexts/LayoutContext";
 import type { ComposeDraft, MessageItem, ThreadItem } from "@/lib/api";
 import { formatDistanceToNow } from "@/lib/dates";
 import { formatPreviewText } from "@/lib/emailContent";
+import { cn } from "@/lib/utils";
 
 interface EmailPanelProps {
   thread: ThreadItem | null;
@@ -42,6 +44,8 @@ interface EmailPanelProps {
   isGenerating: boolean;
   isSending: boolean;
   composeError?: string | null;
+  onBack?: () => void;
+  className?: string;
 }
 
 export function EmailPanel({
@@ -58,11 +62,18 @@ export function EmailPanel({
   isGenerating,
   isSending,
   composeError,
+  onBack,
+  className,
 }: EmailPanelProps) {
+  const { openChat, isWide } = useLayout();
+
   if (!thread) {
     return (
       <section
-        className="bg-background relative flex min-w-0 flex-1 flex-col"
+        className={cn(
+          "bg-background relative flex min-w-0 flex-1 flex-col",
+          className,
+        )}
         aria-label="Email content"
       >
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
@@ -105,16 +116,31 @@ export function EmailPanel({
 
   return (
     <section
-      className="bg-background relative flex min-w-0 flex-1 flex-col"
+      className={cn(
+        "bg-background relative flex min-w-0 flex-1 flex-col",
+        className,
+      )}
       aria-label="Email content"
     >
-      <header className="border-b px-6 py-4">
+      <header className="border-b px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">
-                {formatPreviewText(thread.subject || "(No subject)")}
-              </h2>
+          <div className="flex min-w-0 items-start gap-2">
+            {onBack && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mt-0.5 size-8 shrink-0"
+                onClick={onBack}
+                aria-label="Back to inbox"
+              >
+                <ArrowLeft className="size-4" />
+              </Button>
+            )}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold sm:text-lg">
+                  {formatPreviewText(thread.subject || "(No subject)")}
+                </h2>
               {thread.category?.name && (
                 <Badge
                   variant="secondary"
@@ -134,9 +160,16 @@ export function EmailPanel({
             <p className="text-muted-foreground mt-1 text-sm">
               {thread.participant_emails.join(", ")}
             </p>
+            </div>
           </div>
           {gmailConnected && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {!isWide && (
+                <Button variant="outline" size="sm" onClick={openChat}>
+                  <Bot className="size-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">AI</span>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -175,7 +208,7 @@ export function EmailPanel({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 pb-48">
+      <div className="flex-1 overflow-y-auto p-4 pb-32 sm:p-6 sm:pb-48">
         {isLoading && (
           <p className="text-muted-foreground text-sm" role="status">
             Loading messages…

@@ -6,7 +6,11 @@ interface SyncProgressBarProps {
 }
 
 export function SyncProgressBar({ syncStatus }: SyncProgressBarProps) {
-  if (!syncStatus || syncStatus.status === "idle") {
+  if (
+    !syncStatus ||
+    syncStatus.status === "idle" ||
+    syncStatus.status === "completed"
+  ) {
     return null;
   }
 

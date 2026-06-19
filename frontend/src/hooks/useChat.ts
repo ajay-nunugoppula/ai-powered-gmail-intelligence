@@ -52,4 +52,17 @@ export function useSendChatMessage(sessionId: string | null) {
   });
 }
 
+export function useDeleteChatSession() {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      api.deleteChatSession(session!.access_token, sessionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chat", "sessions"] });
+    },
+  });
+}
+
 export type { ChatMessage, ChatSession };

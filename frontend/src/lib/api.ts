@@ -292,6 +292,12 @@ export const api = {
       { method: "POST", body: JSON.stringify({ content }) },
       token,
     ),
+  deleteChatSession: (token: string, sessionId: string) =>
+    request<{ message: string }>(
+      `/api/v1/chat/sessions/${sessionId}`,
+      { method: "DELETE" },
+      token,
+    ),
 };
 
 export { API_URL };

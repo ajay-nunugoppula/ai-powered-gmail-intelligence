@@ -1,4 +1,4 @@
-import { Inbox, MailOpen, RefreshCw, Sparkles } from "lucide-react";
+import { Inbox, MailOpen, Menu, RefreshCw, Sparkles } from "lucide-react";
 
 import {
   EnrichmentProgressBar,
@@ -8,6 +8,7 @@ import {
 } from "@/components/sync/SyncProgressBar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useLayout } from "@/contexts/LayoutContext";
 import type { EnrichmentStatus, SyncStatus, ThreadItem } from "@/lib/api";
 import { formatDistanceToNow } from "@/lib/dates";
 import { formatPreviewText } from "@/lib/emailContent";
@@ -34,6 +35,7 @@ interface ThreadPanelProps {
   onSelectThread: (threadId: string) => void;
   onSync: () => void;
   onAnalyze: () => void;
+  className?: string;
 }
 
 export function ThreadPanel({
@@ -48,56 +50,87 @@ export function ThreadPanel({
   onSelectThread,
   onSync,
   onAnalyze,
+  className,
 }: ThreadPanelProps) {
+  const { openSidebar, openChat, isMobile, isDesktop, isWide } = useLayout();
+
   return (
     <section
-      className="bg-background flex w-80 shrink-0 flex-col border-r"
+      className={cn(
+        "bg-background flex shrink-0 flex-col border-r",
+        className ?? "w-80",
+      )}
       aria-label="Thread list"
     >
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold">Inbox</h2>
-          <p className="text-muted-foreground text-xs">
-            {threads.length > 0
-              ? `${threads.length} threads`
-              : "Your synced conversations"}
-          </p>
-        </div>
-        {gmailConnected && (
-          <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 border-b px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          {(isMobile || !isDesktop) && (
             <Button
-              variant="outline"
-              size="sm"
-              onClick={onAnalyze}
-              disabled={isSyncing || isEnriching}
-              aria-label="Run AI analysis"
-              title="Summarize, categorize, and embed emails"
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              onClick={openSidebar}
+              aria-label="Open menu"
             >
-              <Sparkles
-                className={cn("size-4", isEnriching && "animate-pulse")}
-                aria-hidden="true"
-              />
+              <Menu className="size-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSync}
-              disabled={isSyncing || isEnriching}
-              aria-label="Sync inbox"
-            >
-              <RefreshCw
-                className={cn("size-4", isSyncing && "animate-spin")}
-                aria-hidden="true"
-              />
-            </Button>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Inbox</h2>
+            <p className="text-muted-foreground truncate text-xs">
+              {threads.length > 0
+                ? `${threads.length} threads`
+                : "Your synced conversations"}
+            </p>
           </div>
-        )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {gmailConnected && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAnalyze}
+                disabled={isSyncing || isEnriching}
+                aria-label="Run AI analysis"
+                title="Summarize, categorize, and embed emails"
+              >
+                <Sparkles
+                  className={cn("size-4", isEnriching && "animate-pulse")}
+                  aria-hidden="true"
+                />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSync}
+                disabled={isSyncing || isEnriching}
+                aria-label="Sync inbox"
+              >
+                <RefreshCw
+                  className={cn("size-4", isSyncing && "animate-spin")}
+                  aria-hidden="true"
+                />
+              </Button>
+            </>
+          )}
+          {!isWide && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openChat}
+              aria-label="Open AI assistant"
+            >
+              <Sparkles className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <SyncProgressBar syncStatus={syncStatus} />
       <EnrichmentProgressBar enrichmentStatus={enrichmentStatus} />
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-2 md:pb-0">
         {!gmailConnected && (
           <EmptyState
             icon={Inbox}
