@@ -1,6 +1,7 @@
 import { Bot, History, Loader2, PanelRightClose, Plus, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { ChatTypingIndicator } from "@/components/chat/ChatTypingIndicator";
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/common/MarkdownText";
 import { ChatHistory } from "@/components/layout/ChatHistory";
@@ -88,6 +89,9 @@ export function ChatPanel({
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [draft, setDraft] = useState("");
+  const [enteringAssistantId, setEnteringAssistantId] = useState<string | null>(
+    null,
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoCreateAttempted = useRef(false);
 
@@ -146,15 +150,20 @@ export function ChatPanel({
   useEffect(() => {
     const node = scrollRef.current;
     if (node) {
-      node.scrollTop = node.scrollHeight;
+      node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
     }
-  }, [messages.length, isSending]);
+  }, [messages.length, isSending, enteringAssistantId]);
 
-  const handleSend = async (content: string) => {
+  const handleSend = (content: string) => {
     const trimmed = content.trim();
     if (!trimmed || !activeSessionId || isSending) return;
     setDraft("");
-    await sendMessage.mutateAsync(trimmed);
+    sendMessage.mutate(trimmed, {
+      onSuccess: (data) => {
+        setEnteringAssistantId(data.assistant_message.id);
+        window.setTimeout(() => setEnteringAssistantId(null), 400);
+      },
+    });
   };
 
   const handleNewChat = () => {
@@ -270,7 +279,7 @@ export function ChatPanel({
     isDeletingSession,
   }: {
     disabled: boolean;
-    handleSend: (content: string) => Promise<void>;
+    handleSend: (content: string) => void;
     handleNewChat: () => void;
     handleCitationClick: (threadId: string) => void;
     onClose: () => void;
@@ -399,7 +408,7 @@ export function ChatPanel({
                     key={prompt}
                     type="button"
                     disabled={disabled || isSending}
-                    onClick={() => void handleSend(prompt)}
+                    onClick={() => handleSend(prompt)}
                     className="bg-muted/50 hover:bg-muted w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors disabled:opacity-50"
                   >
                     {prompt}
@@ -410,10 +419,18 @@ export function ChatPanel({
 
             {messages.map((message) => {
               const isUser = message.role === "user";
+              const isPendingUser = message.id.startsWith("pending-user-");
+              const isEnteringAssistant =
+                !isUser && message.id === enteringAssistantId;
+
               return (
                 <div
                   key={message.id}
-                  className={cn("flex", isUser ? "justify-end" : "justify-start")}
+                  className={cn(
+                    "flex",
+                    isUser ? "justify-end" : "justify-start",
+                    (isPendingUser || isEnteringAssistant) && "chat-message-enter",
+                  )}
                 >
                   <div
                     className={cn(
@@ -439,14 +456,7 @@ export function ChatPanel({
               );
             })}
 
-            {isSending && (
-              <div className="flex justify-start">
-                <div className="bg-muted flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  Searching your inbox…
-                </div>
-              </div>
-            )}
+            {isSending && <ChatTypingIndicator />}
           </div>
           )}
         </div>
@@ -462,7 +472,7 @@ export function ChatPanel({
           className="bg-background shrink-0 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
           onSubmit={(event) => {
             event.preventDefault();
-            void handleSend(draft);
+            handleSend(draft);
           }}
         >
           <div className="flex items-end gap-2">
@@ -477,7 +487,7 @@ export function ChatPanel({
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  void handleSend(draft);
+                  handleSend(draft);
                 }
               }}
               disabled={disabled || isSending}
