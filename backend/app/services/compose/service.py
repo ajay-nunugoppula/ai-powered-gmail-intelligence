@@ -1,9 +1,14 @@
+import logging
+from datetime import UTC, datetime
+
 from googleapiclient.errors import HttpError
 from google.genai.errors import ClientError
 
 from app.config import Settings, get_settings
 from app.services.ai.compose import generate_email_draft
+from app.services.email.repository import save_parsed_message
 from app.services.gmail.client import build_gmail_service
+from app.services.gmail.parser import parse_gmail_message
 from app.services.gmail.sender import (
     build_raw_message,
     build_references_header,
@@ -11,6 +16,8 @@ from app.services.gmail.sender import (
     send_gmail_message,
 )
 from app.services import supabase_client
+
+logger = logging.getLogger(__name__)
 
 
 def _format_ai_error(exc: Exception) -> str:
@@ -141,6 +148,72 @@ def generate_draft(
     }
 
 
+def _persist_sent_message(
+    user_id: str,
+    service: object,
+    *,
+    gmail_message_id: str,
+    profile: dict,
+    to: list[str],
+    cc: list[str] | None,
+    subject: str,
+    body: str,
+    local_thread_id: str | None,
+    gmail_thread_id: str | None,
+    in_reply_to: str | None,
+    references: str | None,
+) -> tuple[str | None, str | None]:
+    """Save a sent message to the local inbox so it appears in the thread view."""
+    try:
+        full_message = (
+            service.users()
+            .messages()
+            .get(userId="me", id=gmail_message_id, format="full")
+            .execute()
+        )
+        parsed = parse_gmail_message(full_message)
+        save_parsed_message(user_id, parsed)
+    except Exception:
+        logger.exception(
+            "Failed to fetch sent Gmail message %s; saving locally from send payload",
+            gmail_message_id,
+        )
+        if not local_thread_id:
+            return None, None
+
+        participants = [profile["email"], *to, *(cc or [])]
+        received_at = datetime.now(UTC).isoformat()
+        is_new = supabase_client.upsert_message(
+            user_id=user_id,
+            thread_id=local_thread_id,
+            gmail_message_id=gmail_message_id,
+            gmail_thread_id=gmail_thread_id or "",
+            from_email=profile["email"],
+            to_emails=to,
+            cc_emails=cc or [],
+            subject=subject.strip(),
+            body_text=body.strip(),
+            body_html=None,
+            received_at=received_at,
+            labels=["SENT"],
+            in_reply_to=in_reply_to,
+            references_header=references,
+            is_read=True,
+        )
+        if is_new:
+            supabase_client.bump_thread_stats(
+                user_id,
+                local_thread_id,
+                received_at=received_at,
+                participant_emails=participants,
+            )
+
+    saved = supabase_client.get_message_by_gmail_id(user_id, gmail_message_id)
+    if saved:
+        return saved.get("thread_id"), saved.get("id")
+    return local_thread_id, None
+
+
 def send_email(
     user_id: str,
     *,
@@ -168,8 +241,10 @@ def send_email(
 
     service = build_gmail_service(user_id, settings)
     gmail_thread_id = None
+    local_thread_id = thread_id
     in_reply_to = None
     references = None
+    thread = None
 
     if reply_to_message_id:
         reply_message = supabase_client.get_message_by_id(user_id, reply_to_message_id)
@@ -181,6 +256,7 @@ def send_email(
         if not thread:
             raise ValueError("Thread not found")
 
+        local_thread_id = resolved_thread_id
         gmail_thread_id = thread["gmail_thread_id"]
         headers = fetch_message_headers(
             service,
@@ -216,8 +292,30 @@ def send_email(
     except HttpError as exc:
         raise ValueError(_format_ai_error(exc)) from exc
 
+    gmail_message_id = result.get("id")
+    saved_thread_id = local_thread_id
+    saved_message_id = None
+
+    if gmail_message_id:
+        saved_thread_id, saved_message_id = _persist_sent_message(
+            user_id,
+            service,
+            gmail_message_id=gmail_message_id,
+            profile=profile,
+            to=to,
+            cc=cc,
+            subject=subject,
+            body=body,
+            local_thread_id=local_thread_id,
+            gmail_thread_id=result.get("threadId") or gmail_thread_id,
+            in_reply_to=in_reply_to,
+            references=references,
+        )
+
     return {
-        "gmail_message_id": result.get("id"),
+        "gmail_message_id": gmail_message_id,
         "gmail_thread_id": result.get("threadId"),
+        "thread_id": saved_thread_id,
+        "message_id": saved_message_id,
         "message": "Email sent successfully",
     }

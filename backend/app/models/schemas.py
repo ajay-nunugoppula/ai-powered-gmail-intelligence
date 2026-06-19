@@ -5,6 +5,11 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class AppConfigResponse(BaseModel):
+    sync_days_back: int
+    enrichment_auto_start: bool
+
+
 class UserProfile(BaseModel):
     id: str
     email: str
@@ -144,6 +149,8 @@ class ComposeSendRequest(BaseModel):
 class ComposeSendResponse(BaseModel):
     gmail_message_id: str | None = None
     gmail_thread_id: str | None = None
+    thread_id: str | None = None
+    message_id: str | None = None
     message: str
 
 

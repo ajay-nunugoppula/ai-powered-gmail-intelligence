@@ -8,8 +8,10 @@ import { EmailPanel } from "@/components/layout/EmailPanel";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ThreadPanel } from "@/components/layout/ThreadPanel";
+import { PipelineStatusBanner } from "@/components/sync/PipelineStatusBanner";
 import { LayoutProvider, useLayout } from "@/contexts/LayoutContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAppConfig } from "@/hooks/useAppConfig";
 import { useGenerateDraft, useSendEmail } from "@/hooks/useCompose";
 import {
   useEnrichmentStatus,
@@ -48,19 +50,29 @@ function AppShellContent() {
 
   const { data: syncStatus } = useSyncStatus();
   const { data: enrichmentStatus } = useEnrichmentStatus();
+  const { data: appConfig } = useAppConfig();
   const startSync = useStartSync();
   const startEnrichment = useStartEnrichment();
   const generateDraft = useGenerateDraft();
   const sendEmail = useSendEmail();
-  const { data: threadsData, isLoading: threadsLoading } = useThreads(
-    activeCategory,
-    search,
-  );
-  const { data: threadDetail, isLoading: threadLoading } =
-    useThreadDetail(selectedThreadId);
 
   const isSyncing = syncStatus?.status === "syncing";
   const isEnriching = enrichmentStatus?.status === "running";
+  const pipelineActive =
+    isSyncing ||
+    isEnriching ||
+    startSync.isPending ||
+    startEnrichment.isPending;
+
+  const { data: threadsData, isLoading: threadsLoading } = useThreads(
+    activeCategory,
+    search,
+    { liveRefresh: pipelineActive },
+  );
+  const { data: threadDetail, isLoading: threadLoading } = useThreadDetail(
+    selectedThreadId,
+    { liveRefresh: pipelineActive },
+  );
 
   useEffect(() => {
     if (syncStatus?.status === "completed" || syncStatus?.status === "failed") {
@@ -164,6 +176,16 @@ function AppShellContent() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <PipelineStatusBanner
+          syncStatus={syncStatus}
+          enrichmentStatus={enrichmentStatus}
+          appConfig={appConfig}
+          threadCount={threadsData?.items.length ?? 0}
+          isSyncPending={startSync.isPending}
+          isEnrichPending={startEnrichment.isPending}
+          onRetrySync={handleSync}
+          onRetryAnalyze={handleAnalyze}
+        />
         <div
           className={cn(
             "flex min-h-0 flex-1",
@@ -177,9 +199,9 @@ function AppShellContent() {
               isLoading={threadsLoading}
               selectedThreadId={selectedThreadId}
               syncStatus={syncStatus}
-              enrichmentStatus={enrichmentStatus}
               isSyncing={isSyncing || startSync.isPending}
               isEnriching={isEnriching || startEnrichment.isPending}
+              syncDaysBack={appConfig?.sync_days_back}
               onSelectThread={handleSelectThread}
               onSync={handleSync}
               onAnalyze={handleAnalyze}
@@ -193,6 +215,16 @@ function AppShellContent() {
               messages={threadDetail?.messages ?? []}
               isLoading={threadLoading}
               gmailConnected={profile?.gmail_connected ?? false}
+              userEmail={profile?.email}
+              isEnriching={isEnriching || startEnrichment.isPending}
+              enrichmentProgress={
+                enrichmentStatus?.status === "running"
+                  ? {
+                      processed: enrichmentStatus.processed,
+                      total: enrichmentStatus.total,
+                    }
+                  : undefined
+              }
               composeOpen={composeOpen}
               composeContext={composeContext}
               onOpenCompose={handleOpenCompose}
@@ -200,8 +232,10 @@ function AppShellContent() {
               onGenerateDraft={(payload) => generateDraft.mutateAsync(payload)}
               onSendEmail={async (payload) => {
                 await sendEmail.mutateAsync(payload);
-                void queryClient.invalidateQueries({ queryKey: ["threads"] });
-                void queryClient.invalidateQueries({ queryKey: ["thread"] });
+                await queryClient.invalidateQueries({ queryKey: ["threads"] });
+                await queryClient.invalidateQueries({
+                  queryKey: ["thread", selectedThreadId],
+                });
               }}
               isGenerating={generateDraft.isPending}
               isSending={sendEmail.isPending}
@@ -216,6 +250,15 @@ function AppShellContent() {
               mode="docked"
               gmailConnected={profile?.gmail_connected ?? false}
               inboxIndexed={enrichmentStatus?.status === "completed"}
+              isEnriching={isEnriching || startEnrichment.isPending}
+              enrichmentProgress={
+                enrichmentStatus?.status === "running"
+                  ? {
+                      processed: enrichmentStatus.processed,
+                      total: enrichmentStatus.total,
+                    }
+                  : undefined
+              }
               onSelectThread={handleSelectThread}
             />
           )}
@@ -231,6 +274,15 @@ function AppShellContent() {
           mode="overlay"
           gmailConnected={profile?.gmail_connected ?? false}
           inboxIndexed={enrichmentStatus?.status === "completed"}
+          isEnriching={isEnriching || startEnrichment.isPending}
+          enrichmentProgress={
+            enrichmentStatus?.status === "running"
+              ? {
+                  processed: enrichmentStatus.processed,
+                  total: enrichmentStatus.total,
+                }
+              : undefined
+          }
           onSelectThread={handleSelectThread}
         />
       )}

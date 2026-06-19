@@ -42,6 +42,11 @@ export interface EnrichmentStatus {
   error?: string | null;
 }
 
+export interface AppConfig {
+  sync_days_back: number;
+  enrichment_auto_start: boolean;
+}
+
 export interface CategoryInfo {
   name: string | null;
   slug: string | null;
@@ -175,6 +180,7 @@ async function request<T>(
 
 export const api = {
   getHealth: () => request<{ status: string }>("/api/v1/health"),
+  getConfig: () => request<AppConfig>("/api/v1/config"),
   getRoot: () => request<{ message: string; status: string }>("/"),
   getMe: (token: string) =>
     request<UserProfile>("/api/v1/auth/me", { method: "GET" }, token),

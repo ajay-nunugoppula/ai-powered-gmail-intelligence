@@ -26,6 +26,8 @@ interface ChatPanelProps {
   mode: "docked" | "overlay";
   gmailConnected: boolean;
   inboxIndexed: boolean;
+  isEnriching?: boolean;
+  enrichmentProgress?: { processed: number; total: number };
   onSelectThread?: (threadId: string) => void;
 }
 
@@ -78,6 +80,8 @@ export function ChatPanel({
   mode,
   gmailConnected,
   inboxIndexed,
+  isEnriching = false,
+  enrichmentProgress,
   onSelectThread,
 }: ChatPanelProps) {
   const { closeChat, toggleChat, isMobile } = useLayout();
@@ -297,9 +301,14 @@ export function ChatPanel({
                     : activeSession?.title
                       ? formatPreviewText(activeSession.title)
                       : gmailConnected
-                        ? inboxIndexed
-                          ? "Ask about your synced emails"
-                          : "Run Analyze inbox to enable search"
+                        ? isEnriching
+                          ? enrichmentProgress &&
+                            enrichmentProgress.total > 0
+                            ? `Indexing inbox for search… ${Math.round((enrichmentProgress.processed / enrichmentProgress.total) * 100)}%`
+                            : "Indexing inbox for search…"
+                          : inboxIndexed
+                            ? "Ask about your synced emails"
+                            : "AI analysis pending — chat search not ready yet"
                         : "Connect Gmail to start chatting"}
                 </p>
               </div>

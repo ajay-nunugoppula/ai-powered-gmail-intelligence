@@ -399,6 +399,19 @@ def message_exists(user_id: str, gmail_message_id: str) -> bool:
     return bool(result.data)
 
 
+def get_message_by_gmail_id(user_id: str, gmail_message_id: str) -> dict | None:
+    client = get_supabase_client()
+    result = (
+        client.table("messages")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("gmail_message_id", gmail_message_id)
+        .maybe_single()
+        .execute()
+    )
+    return _maybe_single_data(result)
+
+
 def count_threads(user_id: str) -> int:
     client = get_supabase_client()
     result = (

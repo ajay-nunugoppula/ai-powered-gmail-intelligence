@@ -16,3 +16,20 @@ export function formatDistanceToNow(date: Date): string {
     day: "numeric",
   });
 }
+
+const IST_OPTIONS: Intl.DateTimeFormatOptions = {
+  timeZone: "Asia/Kolkata",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+};
+
+export function formatDateTimeIST(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+
+  return `${date.toLocaleString("en-IN", IST_OPTIONS)} IST`;
+}

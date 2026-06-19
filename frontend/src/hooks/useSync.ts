@@ -28,7 +28,11 @@ export function useStartSync() {
   });
 }
 
-export function useThreads(category: string, search: string) {
+export function useThreads(
+  category: string,
+  search: string,
+  options?: { liveRefresh?: boolean },
+) {
   const { session } = useAuth();
 
   return useQuery({
@@ -39,15 +43,20 @@ export function useThreads(category: string, search: string) {
         search: search || undefined,
       }),
     enabled: Boolean(session?.access_token),
+    refetchInterval: options?.liveRefresh ? 3000 : false,
   });
 }
 
-export function useThreadDetail(threadId: string | null) {
+export function useThreadDetail(
+  threadId: string | null,
+  options?: { liveRefresh?: boolean },
+) {
   const { session } = useAuth();
 
   return useQuery({
     queryKey: ["thread", threadId],
     queryFn: () => api.getThread(session!.access_token, threadId!),
     enabled: Boolean(session?.access_token && threadId),
+    refetchInterval: options?.liveRefresh ? 3000 : false,
   });
 }

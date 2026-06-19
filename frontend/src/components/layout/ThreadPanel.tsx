@@ -1,15 +1,9 @@
-import { Inbox, MailOpen, Menu, RefreshCw, Sparkles } from "lucide-react";
+import { Inbox, Loader2, MailOpen, Menu, RefreshCw, Sparkles } from "lucide-react";
 
-import {
-  EnrichmentProgressBar,
-} from "@/components/sync/EnrichmentProgressBar";
-import {
-  SyncProgressBar,
-} from "@/components/sync/SyncProgressBar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useLayout } from "@/contexts/LayoutContext";
-import type { EnrichmentStatus, SyncStatus, ThreadItem } from "@/lib/api";
+import type { SyncStatus, ThreadItem } from "@/lib/api";
 import { formatDistanceToNow } from "@/lib/dates";
 import { formatPreviewText } from "@/lib/emailContent";
 import { cn } from "@/lib/utils";
@@ -23,15 +17,29 @@ function formatThreadDate(value: string | null) {
   }
 }
 
+function ThreadListSkeleton() {
+  return (
+    <div className="space-y-0" aria-hidden="true">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="animate-pulse border-b px-4 py-3">
+          <div className="bg-muted mb-2 h-4 w-3/4 rounded" />
+          <div className="bg-muted mb-2 h-3 w-1/3 rounded" />
+          <div className="bg-muted h-3 w-full rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface ThreadPanelProps {
   gmailConnected: boolean;
   threads: ThreadItem[];
   isLoading: boolean;
   selectedThreadId: string | null;
   syncStatus?: SyncStatus;
-  enrichmentStatus?: EnrichmentStatus;
   isSyncing: boolean;
   isEnriching: boolean;
+  syncDaysBack?: number;
   onSelectThread: (threadId: string) => void;
   onSync: () => void;
   onAnalyze: () => void;
@@ -44,15 +52,16 @@ export function ThreadPanel({
   isLoading,
   selectedThreadId,
   syncStatus,
-  enrichmentStatus,
   isSyncing,
   isEnriching,
+  syncDaysBack = 7,
   onSelectThread,
   onSync,
   onAnalyze,
   className,
 }: ThreadPanelProps) {
   const { openSidebar, openChat, isMobile, isDesktop, isWide } = useLayout();
+  const syncDaysLabel = `${syncDaysBack} day${syncDaysBack === 1 ? "" : "s"}`;
 
   return (
     <section
@@ -78,9 +87,13 @@ export function ThreadPanel({
           <div className="min-w-0">
             <h2 className="text-sm font-semibold">Inbox</h2>
             <p className="text-muted-foreground truncate text-xs">
-              {threads.length > 0
-                ? `${threads.length} threads`
-                : "Your synced conversations"}
+              {isSyncing
+                ? "Importing conversations…"
+                : isEnriching
+                  ? "AI analysis in progress…"
+                  : threads.length > 0
+                    ? `${threads.length} threads`
+                    : "Your synced conversations"}
             </p>
           </div>
         </div>
@@ -127,9 +140,6 @@ export function ThreadPanel({
         </div>
       </div>
 
-      <SyncProgressBar syncStatus={syncStatus} />
-      <EnrichmentProgressBar enrichmentStatus={enrichmentStatus} />
-
       <div className="flex-1 overflow-y-auto pb-2 md:pb-0">
         {!gmailConnected && (
           <EmptyState
@@ -139,15 +149,21 @@ export function ThreadPanel({
           />
         )}
 
-        {gmailConnected && isLoading && (
-          <p className="text-muted-foreground p-4 text-sm" role="status">
-            Loading threads…
+        {gmailConnected && isLoading && threads.length === 0 && (
+          <ThreadListSkeleton />
+        )}
+
+        {gmailConnected && isLoading && threads.length > 0 && (
+          <p className="text-muted-foreground flex items-center gap-2 p-4 text-sm" role="status">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Refreshing threads…
           </p>
         )}
 
         {gmailConnected && !isLoading && threads.length === 0 && (
           <EmptyState
-            icon={MailOpen}
+            icon={isSyncing ? Loader2 : MailOpen}
+            iconClassName={isSyncing ? "animate-spin" : undefined}
             title={
               syncStatus?.status === "failed"
                 ? "Sync failed"
@@ -160,8 +176,8 @@ export function ThreadPanel({
                 ? (syncStatus.progress.error ??
                   "Click the refresh button to try again.")
                 : isSyncing
-                  ? "Importing emails from the last 90 days."
-                  : "Click sync to import emails from the last 90 days."
+                  ? `Importing emails from the last ${syncDaysLabel}. Threads will appear here as they arrive.`
+                  : `Click sync to import emails from the last ${syncDaysLabel}.`
             }
           />
         )}
@@ -184,19 +200,33 @@ export function ThreadPanel({
                 {formatThreadDate(thread.last_message_at)}
               </span>
             </div>
-            {thread.category?.name && (
-              <Badge
-                variant="outline"
-                className="mb-1 text-[10px]"
-                style={
-                  thread.category.color
-                    ? { borderColor: thread.category.color, color: thread.category.color }
-                    : undefined
-                }
-              >
-                {thread.category.name}
-              </Badge>
-            )}
+            <div className="mb-1 flex flex-wrap items-center gap-1">
+              {thread.category?.name && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px]"
+                  style={
+                    thread.category.color
+                      ? {
+                          borderColor: thread.category.color,
+                          color: thread.category.color,
+                        }
+                      : undefined
+                  }
+                >
+                  {thread.category.name}
+                </Badge>
+              )}
+              {isEnriching && !thread.thread_summary && !thread.category?.name && (
+                <Badge variant="secondary" className="text-[10px]">
+                  <Loader2
+                    className="mr-1 size-3 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Analyzing
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground line-clamp-2 text-xs">
               {formatPreviewText(
                 thread.thread_summary || thread.snippet || "No preview available",
@@ -216,18 +246,23 @@ export function ThreadPanel({
 
 function EmptyState({
   icon: Icon,
+  iconClassName,
   title,
   description,
 }: {
   icon: typeof Inbox;
+  iconClassName?: string;
   title: string;
   description: string;
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
-      <Icon className="text-muted-foreground size-10" aria-hidden="true" />
+      <Icon
+        className={cn("text-muted-foreground size-10", iconClassName)}
+        aria-hidden="true"
+      />
       <p className="text-sm font-medium">{title}</p>
-      <p className="text-muted-foreground text-xs">{description}</p>
+      <p className="text-muted-foreground text-xs leading-relaxed">{description}</p>
     </div>
   );
 }

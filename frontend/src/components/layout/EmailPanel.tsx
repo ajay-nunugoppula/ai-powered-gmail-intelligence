@@ -6,11 +6,12 @@ import {
   ComposeDrawer,
   type ComposeContext,
 } from "@/components/email/ComposeDrawer";
+import { AnalysisPendingCard } from "@/components/sync/AnalysisPendingCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useLayout } from "@/contexts/LayoutContext";
 import type { ComposeDraft, MessageItem, ThreadItem } from "@/lib/api";
-import { formatDistanceToNow } from "@/lib/dates";
+import { formatDateTimeIST } from "@/lib/dates";
 import { formatPreviewText } from "@/lib/emailContent";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ interface EmailPanelProps {
   messages: MessageItem[];
   isLoading: boolean;
   gmailConnected: boolean;
+  userEmail?: string | null;
   composeOpen: boolean;
   composeContext: ComposeContext | null;
   onOpenCompose: (context: ComposeContext) => void;
@@ -44,6 +46,8 @@ interface EmailPanelProps {
   isGenerating: boolean;
   isSending: boolean;
   composeError?: string | null;
+  isEnriching?: boolean;
+  enrichmentProgress?: { processed: number; total: number };
   onBack?: () => void;
   className?: string;
 }
@@ -53,6 +57,7 @@ export function EmailPanel({
   messages,
   isLoading,
   gmailConnected,
+  userEmail,
   composeOpen,
   composeContext,
   onOpenCompose,
@@ -62,6 +67,8 @@ export function EmailPanel({
   isGenerating,
   isSending,
   composeError,
+  isEnriching = false,
+  enrichmentProgress,
   onBack,
   className,
 }: EmailPanelProps) {
@@ -217,22 +224,41 @@ export function EmailPanel({
 
         {!isLoading && (
           <div className="space-y-6">
-            {thread.thread_summary && (
+            {thread.thread_summary ? (
               <AiSummaryCard
                 title="Thread summary"
                 summary={thread.thread_summary}
               />
+            ) : (
+              isEnriching && (
+                <AnalysisPendingCard progress={enrichmentProgress} />
+              )
             )}
 
-            {messages.map((message) => (
+            {messages.map((message) => {
+              const isSentByUser =
+                Boolean(userEmail) &&
+                message.from_email.toLowerCase() === userEmail!.toLowerCase();
+
+              return (
               <article
                 key={message.id}
-                className="rounded-xl border p-4 shadow-sm"
+                className={cn(
+                  "rounded-xl border p-4 shadow-sm",
+                  isSentByUser && "border-primary/25 bg-primary/5",
+                )}
               >
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium">{message.from_email}</p>
+                      <p className="text-sm font-medium">
+                        {isSentByUser ? "You" : message.from_email}
+                      </p>
+                      {isSentByUser && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Sent
+                        </Badge>
+                      )}
                       {message.category?.name && (
                         <Badge variant="outline" className="text-[10px]">
                           {message.category.name}
@@ -264,16 +290,24 @@ export function EmailPanel({
                       </Button>
                     )}
                     <time
-                      className="text-muted-foreground text-xs"
+                      className="text-muted-foreground shrink-0 text-xs"
                       dateTime={message.received_at}
+                      title={formatDateTimeIST(message.received_at)}
                     >
-                      {formatDistanceToNow(new Date(message.received_at))}
+                      {formatDateTimeIST(message.received_at)}
                     </time>
                   </div>
                 </div>
 
                 {message.summary && (
-                  <div className="bg-muted/50 mb-3 rounded-lg p-3">
+                  <div
+                    className={cn(
+                      "mb-3 rounded-lg border p-3 shadow-sm",
+                      isSentByUser
+                        ? "border-primary/20 bg-white dark:bg-card"
+                        : "border-border/60 bg-white dark:bg-card",
+                    )}
+                  >
                     <p className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">
                       AI summary
                     </p>
@@ -286,7 +320,8 @@ export function EmailPanel({
                   bodyHtml={message.body_html}
                 />
               </article>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
