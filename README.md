@@ -27,7 +27,7 @@ AI-powered Gmail Intelligence Platform for the Repeatless technical assessment. 
 | Backend | FastAPI, Python 3.12 |
 | Database | Supabase (PostgreSQL + pgvector + RLS) |
 | Auth | Supabase Auth (Google OAuth) + Gmail API OAuth |
-| Primary AI | Google Gemini (`gemini-2.0-flash`) |
+| Primary AI | Google Gemini (`gemini-3.1-flash-lite`) |
 | Embeddings | NVIDIA NIM (`nvidia/nv-embedqa-e5-v5`) |
 | Jobs | ARQ + Redis (optional; in-process fallback on Vercel) |
 | Deployment | Vercel (frontend + backend) — see [DEPLOYMENT.md](DEPLOYMENT.md) |
@@ -215,7 +215,7 @@ Set `USE_ARQ_WORKER=true` in `backend/.env`. Without Redis, sync and enrichment 
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | Yes | Gmail OAuth callback. e.g. `http://localhost:8000/api/v1/auth/gmail/callback` |
 | `GEMINI_API_KEY` | Yes* | Google Gemini API key for summarize, chat, compose |
-| `GEMINI_MODEL` | No | Gemini model name. Default: `gemini-2.0-flash` |
+| `GEMINI_MODEL` | No | Gemini model name. Default: `gemini-3.1-flash-lite` |
 | `NVIDIA_API_KEY` | Yes* | NVIDIA NIM API key for embeddings |
 | `NVIDIA_NIM_BASE_URL` | No | NIM API base URL. Default: `https://integrate.api.nvidia.com/v1` |
 | `NVIDIA_EMBED_MODEL` | No | Embedding model. Default: `nvidia/nv-embedqa-e5-v5` |
