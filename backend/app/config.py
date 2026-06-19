@@ -1,6 +1,11 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_LEGACY_NVIDIA_EMBED_MODELS = {
+    "nvidia/nv-embedqa-e5-v5-v2": "nvidia/nv-embedqa-e5-v5",
+}
 
 
 class Settings(BaseSettings):
@@ -26,8 +31,10 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/v1/auth/gmail/callback"
 
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
     nvidia_api_key: str = ""
     nvidia_nim_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_embed_model: str = "nvidia/nv-embedqa-e5-v5"
 
     redis_url: str = "redis://localhost:6379"
     token_encryption_key: str = ""
@@ -39,6 +46,23 @@ class Settings(BaseSettings):
     gmail_requests_per_second: float = 10.0
     use_arq_worker: bool = False
     sync_stale_seconds: int = 90
+
+    enrichment_auto_start: bool = True
+    enrichment_batch_size: int = 50
+    embedding_chunk_size: int = 400
+    embedding_chunk_overlap: int = 50
+
+    @field_validator("nvidia_embed_model", mode="before")
+    @classmethod
+    def normalize_nvidia_embed_model(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        model = value.strip()
+        if model in _LEGACY_NVIDIA_EMBED_MODELS:
+            return _LEGACY_NVIDIA_EMBED_MODELS[model]
+        if model.endswith("-v2"):
+            return "nvidia/nv-embedqa-e5-v5"
+        return model
 
     @property
     def cors_origins_list(self) -> list[str]:

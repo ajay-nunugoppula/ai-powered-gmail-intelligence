@@ -479,3 +479,305 @@ def get_thread_detail(user_id: str, thread_id: str) -> dict | None:
         "thread": thread_row,
         "messages": messages_result.data or [],
     }
+
+
+def list_categories(user_id: str) -> list[dict]:
+    client = get_supabase_client()
+    result = (
+        client.table("categories")
+        .select("id, name, slug, color, is_system")
+        .eq("user_id", user_id)
+        .order("name")
+        .execute()
+    )
+    return result.data or []
+
+
+def get_enrichment_progress(user_id: str) -> dict:
+    state = get_sync_state(user_id) or {}
+    progress = state.get("progress_json") or {}
+    enrichment = progress.get("enrichment") or {}
+    return {
+        "status": enrichment.get("status", "idle"),
+        "phase": enrichment.get("phase", "idle"),
+        "total": enrichment.get("total", 0),
+        "processed": enrichment.get("processed", 0),
+        "error": enrichment.get("error"),
+        "last_progress_at": enrichment.get("last_progress_at"),
+    }
+
+
+def update_enrichment_progress(user_id: str, enrichment: dict) -> None:
+    state = get_sync_state(user_id) or {}
+    progress = dict(state.get("progress_json") or {})
+    enrichment = {
+        **enrichment,
+        "last_progress_at": datetime.now(UTC).isoformat(),
+    }
+    progress["enrichment"] = enrichment
+    client = get_supabase_client()
+    client.table("sync_state").update({"progress_json": progress}).eq("user_id", user_id).execute()
+
+
+def list_messages_for_enrichment(user_id: str, *, limit: int = 50) -> list[dict]:
+    client = get_supabase_client()
+    result = (
+        client.table("messages")
+        .select(
+            "id, thread_id, subject, from_email, body_text, received_at, "
+            "message_summaries(summary), message_categories(category_id, confidence), "
+            "message_embeddings(id)"
+        )
+        .eq("user_id", user_id)
+        .order("received_at", desc=True)
+        .limit(limit * 4)
+        .execute()
+    )
+
+    pending: list[dict] = []
+    for row in result.data or []:
+        has_summary = bool(row.get("message_summaries"))
+        has_category = bool(row.get("message_categories"))
+        embeddings = row.get("message_embeddings")
+        has_embedding = bool(embeddings) if not isinstance(embeddings, list) else len(embeddings) > 0
+        if has_summary and has_category and has_embedding:
+            continue
+        pending.append(row)
+        if len(pending) >= limit:
+            break
+    return pending
+
+
+def count_messages_needing_enrichment(user_id: str) -> int:
+    client = get_supabase_client()
+    offset = 0
+    page_size = 500
+    count = 0
+
+    while True:
+        result = (
+            client.table("messages")
+            .select(
+                "id, message_summaries(summary), message_categories(category_id), message_embeddings(id)"
+            )
+            .eq("user_id", user_id)
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        rows = result.data or []
+        if not rows:
+            break
+
+        for row in rows:
+            has_summary = bool(row.get("message_summaries"))
+            has_category = bool(row.get("message_categories"))
+            embeddings = row.get("message_embeddings")
+            has_embedding = (
+                bool(embeddings) if not isinstance(embeddings, list) else len(embeddings) > 0
+            )
+            if not (has_summary and has_category and has_embedding):
+                count += 1
+
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    return count
+
+
+def upsert_message_summary(message_id: str, summary: str, model: str) -> None:
+    client = get_supabase_client()
+    client.table("message_summaries").upsert(
+        {
+            "message_id": message_id,
+            "summary": summary,
+            "model": model,
+        }
+    ).execute()
+
+
+def upsert_thread_summary(thread_id: str, summary: str, model: str) -> None:
+    client = get_supabase_client()
+    client.table("thread_summaries").upsert(
+        {
+            "thread_id": thread_id,
+            "summary": summary,
+            "model": model,
+        }
+    ).execute()
+    client.table("threads").update(
+        {
+            "thread_summary": summary,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    ).eq("id", thread_id).execute()
+
+
+def upsert_message_category(
+    message_id: str,
+    category_id: str,
+    confidence: float,
+    model: str,
+) -> None:
+    client = get_supabase_client()
+    client.table("message_categories").upsert(
+        {
+            "message_id": message_id,
+            "category_id": category_id,
+            "confidence": confidence,
+            "model": model,
+        }
+    ).execute()
+
+
+def assign_thread_category(thread_id: str, category_id: str) -> None:
+    client = get_supabase_client()
+    client.table("threads").update(
+        {
+            "category_id": category_id,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    ).eq("id", thread_id).execute()
+
+
+def upsert_message_embedding(
+    *,
+    message_id: str,
+    user_id: str,
+    chunk_index: int,
+    chunk_text: str,
+    embedding: list[float],
+    metadata: dict | None = None,
+) -> None:
+    client = get_supabase_client()
+    client.table("message_embeddings").upsert(
+        {
+            "message_id": message_id,
+            "user_id": user_id,
+            "chunk_index": chunk_index,
+            "chunk_text": chunk_text,
+            "embedding": embedding,
+            "metadata": metadata or {},
+        }
+    ).execute()
+
+
+def get_thread_messages_with_summaries(user_id: str, thread_id: str) -> list[dict]:
+    client = get_supabase_client()
+    result = (
+        client.table("messages")
+        .select("id, subject, received_at, message_summaries(summary)")
+        .eq("user_id", user_id)
+        .eq("thread_id", thread_id)
+        .order("received_at", desc=False)
+        .execute()
+    )
+    return result.data or []
+
+
+def get_thread_subject(user_id: str, thread_id: str) -> str | None:
+    client = get_supabase_client()
+    result = (
+        client.table("threads")
+        .select("subject")
+        .eq("user_id", user_id)
+        .eq("id", thread_id)
+        .maybe_single()
+        .execute()
+    )
+    row = _maybe_single_data(result)
+    return row.get("subject") if row else None
+
+
+def get_message_summaries_for_thread(user_id: str, thread_id: str) -> list[str]:
+    rows = get_thread_messages_with_summaries(user_id, thread_id)
+    summaries: list[str] = []
+    for row in rows:
+        summary_row = row.get("message_summaries")
+        if isinstance(summary_row, dict) and summary_row.get("summary"):
+            summaries.append(summary_row["summary"])
+    return summaries
+
+
+def get_thread_detail_with_enrichment(user_id: str, thread_id: str) -> dict | None:
+    detail = get_thread_detail(user_id, thread_id)
+    if not detail:
+        return None
+
+    client = get_supabase_client()
+    message_ids = [message["id"] for message in detail["messages"]]
+    if not message_ids:
+        return detail
+
+    summaries_result = (
+        client.table("message_summaries")
+        .select("message_id, summary")
+        .in_("message_id", message_ids)
+        .execute()
+    )
+    categories_result = (
+        client.table("message_categories")
+        .select("message_id, confidence, categories(name, slug, color)")
+        .in_("message_id", message_ids)
+        .execute()
+    )
+
+    summary_map = {
+        row["message_id"]: row["summary"] for row in summaries_result.data or []
+    }
+    category_map = {
+        row["message_id"]: row for row in categories_result.data or []
+    }
+
+    enriched_messages = []
+    for message in detail["messages"]:
+        enriched = dict(message)
+        enriched["summary"] = summary_map.get(message["id"])
+        category_row = category_map.get(message["id"])
+        if category_row:
+            enriched["category"] = category_row.get("categories")
+            enriched["category_confidence"] = category_row.get("confidence")
+        enriched_messages.append(enriched)
+
+    return {
+        "thread": detail["thread"],
+        "messages": enriched_messages,
+    }
+
+
+def get_message_by_id(user_id: str, message_id: str) -> dict | None:
+    client = get_supabase_client()
+    result = (
+        client.table("messages")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("id", message_id)
+        .maybe_single()
+        .execute()
+    )
+    return _maybe_single_data(result)
+
+
+def get_thread_row(user_id: str, thread_id: str) -> dict | None:
+    client = get_supabase_client()
+    result = (
+        client.table("threads")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("id", thread_id)
+        .maybe_single()
+        .execute()
+    )
+    return _maybe_single_data(result)
+
+
+def get_message_summary(message_id: str) -> dict | None:
+    client = get_supabase_client()
+    result = (
+        client.table("message_summaries")
+        .select("summary")
+        .eq("message_id", message_id)
+        .maybe_single()
+        .execute()
+    )
+    return _maybe_single_data(result)

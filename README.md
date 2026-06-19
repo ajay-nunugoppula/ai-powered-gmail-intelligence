@@ -134,6 +134,29 @@ Requires Redis running at `REDIS_URL`. Without Redis, clicking **Sync** still wo
 - Use the refresh button in the inbox panel to run incremental sync.
 - Progress is shown in the thread list header while syncing.
 
+### AI enrichment (Phase 3)
+
+After Gmail sync completes, the backend automatically:
+- **Summarizes** each message and thread (Gemini)
+- **Categorizes** emails into your inbox categories (Gemini)
+- **Embeds** message chunks for RAG search (NVIDIA NIM, 1024-dim vectors)
+
+Requires `GEMINI_API_KEY` and `NVIDIA_API_KEY` in `backend/.env`.
+
+- Click the **sparkles** button in the inbox panel to run analysis manually.
+- Progress shows while enrichment is running; thread list updates with categories and summaries.
+- Sidebar category filters work once emails are categorized.
+
+### Compose & reply (Phase 4)
+
+- Open a thread and click **Reply** on any message, or **Compose** for a new email.
+- Choose tone (professional / friendly / concise) and optional instructions.
+- Click **Generate draft** — Gemini writes the email using thread context.
+- Edit the draft, then **Send** — delivered via Gmail API (`gmail.send` scope).
+- Replies stay in the same Gmail thread with proper `In-Reply-To` headers.
+
+Requires `GEMINI_API_KEY` for draft generation and Gmail connected with send permission.
+
 ## Environment Variables
 
 See [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example).
@@ -193,8 +216,8 @@ Google login uses **Supabase Auth** on the frontend. API calls send the Supabase
 - [x] **Phase 0** — Project scaffolding, database schema, env setup
 - [x] **Phase 1** — Auth + app shell UI
 - [x] **Phase 2** — Gmail sync pipeline
-- [ ] **Phase 3** — Summarization + categorization
-- [ ] **Phase 4** — Compose & reply
+- [x] **Phase 3** — Summarization + categorization + embeddings
+- [x] **Phase 4** — Compose & reply
 - [ ] **Phase 5** — RAG chat agent
 - [ ] **Phase 6** — Bonus features + polish
 - [ ] **Phase 7** — Deploy + documentation

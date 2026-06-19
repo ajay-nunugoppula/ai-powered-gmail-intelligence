@@ -34,6 +34,14 @@ export interface SyncStatus {
   progress: SyncProgress;
 }
 
+export interface EnrichmentStatus {
+  status: string;
+  phase: string;
+  total: number;
+  processed: number;
+  error?: string | null;
+}
+
 export interface CategoryInfo {
   name: string | null;
   slug: string | null;
@@ -61,6 +69,7 @@ export interface ThreadListResponse {
 
 export interface MessageItem {
   id: string;
+  gmail_message_id?: string | null;
   from_email: string;
   to_emails: string[];
   cc_emails: string[];
@@ -69,11 +78,37 @@ export interface MessageItem {
   body_html: string | null;
   received_at: string;
   is_read: boolean;
+  summary: string | null;
+  category: CategoryInfo | null;
+  category_confidence: number | null;
 }
 
 export interface ThreadDetailResponse {
   thread: ThreadItem;
   messages: MessageItem[];
+}
+
+export interface ComposeDraft {
+  mode: string;
+  thread_id: string | null;
+  message_id: string | null;
+  subject: string;
+  body: string;
+  to: string[];
+  cc: string[];
+}
+
+function parseApiError(body: string) {
+  try {
+    const parsed = JSON.parse(body) as { detail?: string | { msg?: string }[] };
+    if (typeof parsed.detail === "string") return parsed.detail;
+    if (Array.isArray(parsed.detail) && parsed.detail[0]?.msg) {
+      return parsed.detail[0].msg;
+    }
+  } catch {
+    // keep raw body
+  }
+  return body;
 }
 
 async function request<T>(
@@ -98,7 +133,7 @@ async function request<T>(
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new ApiError(response.status, errorBody || response.statusText);
+    throw new ApiError(response.status, parseApiError(errorBody) || response.statusText);
   }
 
   if (response.status === 204) {
@@ -133,6 +168,18 @@ export const api = {
       { method: "POST" },
       token,
     ),
+  getEnrichmentStatus: (token: string) =>
+    request<EnrichmentStatus>(
+      "/api/v1/enrichment/status",
+      { method: "GET" },
+      token,
+    ),
+  startEnrichment: (token: string) =>
+    request<{ status: string; pending_messages: number; message: string }>(
+      "/api/v1/enrichment/start",
+      { method: "POST" },
+      token,
+    ),
   getThreads: (
     token: string,
     params?: { category?: string; search?: string; page?: number },
@@ -152,6 +199,40 @@ export const api = {
     request<ThreadDetailResponse>(
       `/api/v1/threads/${threadId}`,
       { method: "GET" },
+      token,
+    ),
+  generateDraft: (
+    token: string,
+    payload: {
+      mode: "reply" | "compose";
+      thread_id?: string | null;
+      message_id?: string | null;
+      to?: string[];
+      cc?: string[];
+      subject?: string;
+      tone?: string;
+      instructions?: string;
+    },
+  ) =>
+    request<ComposeDraft>(
+      "/api/v1/compose/generate",
+      { method: "POST", body: JSON.stringify(payload) },
+      token,
+    ),
+  sendEmail: (
+    token: string,
+    payload: {
+      to: string[];
+      cc?: string[];
+      subject: string;
+      body: string;
+      thread_id?: string | null;
+      reply_to_message_id?: string | null;
+    },
+  ) =>
+    request<{ gmail_message_id: string | null; message: string }>(
+      "/api/v1/compose/send",
+      { method: "POST", body: JSON.stringify(payload) },
       token,
     ),
 };

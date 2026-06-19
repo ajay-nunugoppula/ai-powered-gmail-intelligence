@@ -29,6 +29,16 @@ def run_gmail_sync_in_thread(user_id: str, job_type: str) -> None:
         logger.info("Gmail sync completed for user %s", user_id)
     except Exception:
         logger.exception("Background Gmail sync failed for user %s", user_id)
+        return
+
+    settings = get_settings()
+    if settings.enrichment_auto_start:
+        try:
+            from app.services.ai.enrichment import run_enrichment
+
+            run_enrichment(user_id)
+        except Exception:
+            logger.exception("Background enrichment failed for user %s", user_id)
 
 
 async def run_gmail_sync_async(user_id: str, job_type: str) -> None:

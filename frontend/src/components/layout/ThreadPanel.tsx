@@ -1,10 +1,14 @@
-import { Inbox, MailOpen, RefreshCw } from "lucide-react";
+import { Inbox, MailOpen, RefreshCw, Sparkles } from "lucide-react";
 
+import {
+  EnrichmentProgressBar,
+} from "@/components/sync/EnrichmentProgressBar";
 import {
   SyncProgressBar,
 } from "@/components/sync/SyncProgressBar";
 import { Button } from "@/components/ui/button";
-import type { SyncStatus, ThreadItem } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import type { EnrichmentStatus, SyncStatus, ThreadItem } from "@/lib/api";
 import { formatDistanceToNow } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
@@ -23,9 +27,12 @@ interface ThreadPanelProps {
   isLoading: boolean;
   selectedThreadId: string | null;
   syncStatus?: SyncStatus;
+  enrichmentStatus?: EnrichmentStatus;
   isSyncing: boolean;
+  isEnriching: boolean;
   onSelectThread: (threadId: string) => void;
   onSync: () => void;
+  onAnalyze: () => void;
 }
 
 export function ThreadPanel({
@@ -34,9 +41,12 @@ export function ThreadPanel({
   isLoading,
   selectedThreadId,
   syncStatus,
+  enrichmentStatus,
   isSyncing,
+  isEnriching,
   onSelectThread,
   onSync,
+  onAnalyze,
 }: ThreadPanelProps) {
   return (
     <section
@@ -53,22 +63,38 @@ export function ThreadPanel({
           </p>
         </div>
         {gmailConnected && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSync}
-            disabled={isSyncing}
-            aria-label="Sync inbox"
-          >
-            <RefreshCw
-              className={cn("size-4", isSyncing && "animate-spin")}
-              aria-hidden="true"
-            />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onAnalyze}
+              disabled={isSyncing || isEnriching}
+              aria-label="Run AI analysis"
+              title="Summarize, categorize, and embed emails"
+            >
+              <Sparkles
+                className={cn("size-4", isEnriching && "animate-pulse")}
+                aria-hidden="true"
+              />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSync}
+              disabled={isSyncing || isEnriching}
+              aria-label="Sync inbox"
+            >
+              <RefreshCw
+                className={cn("size-4", isSyncing && "animate-spin")}
+                aria-hidden="true"
+              />
+            </Button>
+          </div>
         )}
       </div>
 
       <SyncProgressBar syncStatus={syncStatus} />
+      <EnrichmentProgressBar enrichmentStatus={enrichmentStatus} />
 
       <div className="flex-1 overflow-y-auto">
         {!gmailConnected && (
@@ -124,8 +150,21 @@ export function ThreadPanel({
                 {formatThreadDate(thread.last_message_at)}
               </span>
             </div>
+            {thread.category?.name && (
+              <Badge
+                variant="outline"
+                className="mb-1 text-[10px]"
+                style={
+                  thread.category.color
+                    ? { borderColor: thread.category.color, color: thread.category.color }
+                    : undefined
+                }
+              >
+                {thread.category.name}
+              </Badge>
+            )}
             <p className="text-muted-foreground line-clamp-2 text-xs">
-              {thread.snippet || "No preview available"}
+              {thread.thread_summary || thread.snippet || "No preview available"}
             </p>
             {thread.message_count > 1 && (
               <p className="text-muted-foreground mt-1 text-[11px]">

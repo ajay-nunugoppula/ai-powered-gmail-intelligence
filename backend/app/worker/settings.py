@@ -1,7 +1,7 @@
 from arq.connections import RedisSettings
 
 from app.config import get_settings
-from app.worker.tasks import run_gmail_sync_task
+from app.worker.tasks import run_enrichment_task, run_gmail_sync_task
 
 settings = get_settings()
 
@@ -15,7 +15,7 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [run_gmail_sync_task]
+    functions = [run_gmail_sync_task, run_enrichment_task]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

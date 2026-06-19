@@ -56,7 +56,7 @@ def get_thread(
     thread_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> ThreadDetailResponse:
-    detail = supabase_client.get_thread_detail(user_id, thread_id)
+    detail = supabase_client.get_thread_detail_with_enrichment(user_id, thread_id)
     if not detail:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -67,6 +67,7 @@ def get_thread(
     messages = [
         MessageItem(
             id=message["id"],
+            gmail_message_id=message.get("gmail_message_id"),
             from_email=message["from_email"],
             to_emails=message.get("to_emails") or [],
             cc_emails=message.get("cc_emails") or [],
@@ -75,6 +76,13 @@ def get_thread(
             body_html=message.get("body_html"),
             received_at=message["received_at"],
             is_read=message.get("is_read", False),
+            summary=message.get("summary"),
+            category=(
+                CategoryInfo(**message["category"])
+                if message.get("category")
+                else None
+            ),
+            category_confidence=message.get("category_confidence"),
         )
         for message in detail["messages"]
     ]
