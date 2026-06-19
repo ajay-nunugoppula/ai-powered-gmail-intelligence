@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { GmailConnectDialog } from "@/components/auth/GmailConnectDialog";
@@ -51,6 +51,7 @@ function AppShellContent() {
   );
   const [connectingGmail, setConnectingGmail] = useState(false);
   const [pipelineWatch, setPipelineWatch] = useState(false);
+  const hasInitialLoaded = useRef(false);
 
   const startSync = useStartSync();
   const startEnrichment = useStartEnrichment();
@@ -86,6 +87,7 @@ function AppShellContent() {
     search,
     { liveRefresh },
   );
+  const { data: allThreadsData } = useThreads("all", "", { liveRefresh });
   const { data: threadDetail, isLoading: threadLoading } = useThreadDetail(
     selectedThreadId,
     { liveRefresh },
@@ -169,10 +171,25 @@ function AppShellContent() {
       : sendEmail.error?.message) ||
     null;
 
+  useEffect(() => {
+    if (hasInitialLoaded.current) return;
+    if (profileLoading || syncStatusLoading) return;
+    if (profile?.gmail_connected && threadsData === undefined) return;
+    hasInitialLoaded.current = true;
+  }, [
+    profileLoading,
+    syncStatusLoading,
+    profile?.gmail_connected,
+    threadsData,
+  ]);
+
   const isBootstrapping =
-    profileLoading ||
-    syncStatusLoading ||
-    (profile?.gmail_connected && threadsLoading && threadsData === undefined);
+    !hasInitialLoaded.current &&
+    (profileLoading ||
+      syncStatusLoading ||
+      (profile?.gmail_connected &&
+        threadsLoading &&
+        threadsData === undefined));
 
   const showGmailConnectDialog =
     !profileLoading && Boolean(profile) && !profile?.gmail_connected;
@@ -249,6 +266,7 @@ function AppShellContent() {
               thread={threadDetail?.thread ?? null}
               messages={threadDetail?.messages ?? []}
               isLoading={threadLoading}
+              allThreads={allThreadsData?.items ?? []}
               gmailConnected={profile?.gmail_connected ?? false}
               userEmail={profile?.email}
               isEnriching={isEnriching}

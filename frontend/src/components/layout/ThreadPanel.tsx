@@ -153,13 +153,6 @@ export function ThreadPanel({
           <ThreadListSkeleton />
         )}
 
-        {gmailConnected && isLoading && threads.length > 0 && (
-          <p className="text-muted-foreground flex items-center gap-2 p-4 text-sm" role="status">
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            Refreshing threads…
-          </p>
-        )}
-
         {gmailConnected && !isLoading && threads.length === 0 && (
           <EmptyState
             icon={isSyncing ? Loader2 : MailOpen}

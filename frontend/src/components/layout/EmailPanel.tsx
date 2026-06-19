@@ -1,5 +1,6 @@
 import { ArrowLeft, Bot, Mail, PenSquare, Reply } from "lucide-react";
 
+import { CategoryInsights } from "@/components/insights/CategoryInsights";
 import { AiSummaryCard } from "@/components/email/AiSummaryCard";
 import { EmailBody } from "@/components/email/EmailBody";
 import {
@@ -19,6 +20,7 @@ interface EmailPanelProps {
   thread: ThreadItem | null;
   messages: MessageItem[];
   isLoading: boolean;
+  allThreads?: ThreadItem[];
   gmailConnected: boolean;
   userEmail?: string | null;
   composeOpen: boolean;
@@ -56,6 +58,7 @@ export function EmailPanel({
   thread,
   messages,
   isLoading,
+  allThreads = [],
   gmailConnected,
   userEmail,
   composeOpen,
@@ -83,27 +86,34 @@ export function EmailPanel({
         )}
         aria-label="Email content"
       >
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-          <Mail className="text-muted-foreground size-12" aria-hidden="true" />
-          <h2 className="text-lg font-semibold">Select a thread</h2>
-          <p className="text-muted-foreground max-w-sm text-sm">
-            Choose a conversation from the thread list to view messages, AI
-            summaries, and replies.
-          </p>
-          {gmailConnected && (
-            <Button
-              variant="outline"
-              onClick={() =>
-                onOpenCompose({
-                  mode: "compose",
-                  threadId: null,
-                  messageId: null,
-                })
-              }
-            >
-              <PenSquare className="size-4" aria-hidden="true" />
-              Compose new email
-            </Button>
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-6 sm:p-8">
+          <div className="max-w-sm text-center">
+            <Mail className="text-muted-foreground mx-auto mb-3 size-10" aria-hidden="true" />
+            <h2 className="text-lg font-semibold">Select a thread</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Choose a conversation from the thread list to view messages, AI
+              summaries, and replies.
+            </p>
+            {gmailConnected && (
+              <Button
+                className="mt-4"
+                variant="outline"
+                onClick={() =>
+                  onOpenCompose({
+                    mode: "compose",
+                    threadId: null,
+                    messageId: null,
+                  })
+                }
+              >
+                <PenSquare className="size-4" aria-hidden="true" />
+                Compose new email
+              </Button>
+            )}
+          </div>
+
+          {gmailConnected && allThreads.length > 0 && (
+            <CategoryInsights threads={allThreads} />
           )}
         </div>
 
